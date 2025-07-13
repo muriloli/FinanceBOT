@@ -68,7 +68,17 @@ export class AIProcessor {
   }
 
   private getSystemPrompt(): string {
+    const today = new Date();
+    const currentDate = today.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
     return `Você é um assistente financeiro para o aplicativo FinanceFlow.
+
+DATA ATUAL: ${currentDate} (13/07/2025)
 
 REGRAS:
 1. Responda APENAS a tópicos relacionados a finanças
@@ -97,14 +107,16 @@ CATEGORIAS PADRÃO:
 - Investimentos
 
 PROCESSAMENTO DE DATAS:
+HOJE É 13/07/2025 (sábado). Use esta data como referência para todos os cálculos.
+
 Quando o usuário mencionar uma data específica, extraia e converta para formato ISO:
-- "ontem" = data de ontem
-- "anteontem" = dois dias atrás
+- "ontem" = 12/07/2025 (sexta-feira)
+- "anteontem" = 11/07/2025 (quinta-feira)
 - "segunda passada", "terça passada", etc = último dia da semana mencionado
-- "dia 14", "dia 25" = dia específico do mês atual
-- "dia 14 do mês passado" = dia específico do mês anterior
+- "dia 14", "dia 25" = dia específico do mês atual (julho 2025)
+- "dia 14 do mês passado" = dia específico do mês anterior (junho 2025)
 - "segunda-feira", "terça-feira" = próximo ou último dia da semana
-- Se não mencionar data, use a data atual
+- Se não mencionar data, use 13/07/2025
 
 IMPORTANTE: Sempre passe a data no campo 'date' como string no formato 'YYYY-MM-DD'.
 
