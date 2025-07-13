@@ -1,0 +1,245 @@
+# WhatsApp AI Bot for FinanceFlow - Complete Implementation Request
+
+## Project Overview
+I need you to create a WhatsApp AI bot that integrates perfectly with my existing FinanceFlow personal finance application. The bot should allow users to register expenses and income through natural language messages and voice notes via WhatsApp.
+
+## Current System Architecture
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Backend**: Node.js + Express + TypeScript
+- **Database**: Supabase (PostgreSQL)
+- **ORM**: Drizzle
+- **Authentication**: Session-based with user phone verification
+- **Existing Structure**:
+  ```
+  /financeflow
+    /client (React frontend)
+    /server (Node.js backend)
+    /shared (TypeScript schemas)
+    /dist (build output)
+  ```
+
+## Bot Requirements
+
+### Core Functionality
+1. **Authentication**: Verify users by phone number against existing `users` table in Supabase
+2. **Voice Recognition**: Convert WhatsApp audio messages to text using Azure Speech API
+3. **AI Processing**: Use OpenAI GPT-4o to understand user intentions and extract financial data
+4. **Natural Language**: Handle both greetings and direct transaction inputs
+5. **Transaction Registration**: Save transactions to existing Supabase database
+6. **Financial Queries**: Answer questions about user's financial status
+7. **Context Limitation**: Only respond to finance-related topics
+
+### Technical Specifications
+
+#### Technology Stack
+- **Language**: TypeScript/Node.js (same as existing system)
+- **WhatsApp API**: Z-API or Evolution API integration
+- **Speech-to-Text**: Azure Speech API (free tier: 5 hours/month)
+- **AI**: OpenAI GPT-4o with function calling
+- **Database**: Integrate with existing Supabase setup
+- **Integration**: Reuse existing storage functions and schemas
+
+#### Bot Architecture
+```
+/bot (new folder in existing project)
+  ├── index.ts           # Bot initialization
+  ├── webhook.ts         # WhatsApp webhook handler
+  ├── speech-handler.ts  # Azure Speech API integration
+  ├── ai-processor.ts    # OpenAI GPT-4o processing
+  ├── message-router.ts  # Message routing logic
+  └── whatsapp-client.ts # WhatsApp API client
+```
+
+### Detailed Implementation Requirements
+
+#### 1. Webhook Handler (`webhook.ts`)
+- Receive WhatsApp messages (text and audio)
+- Handle different message types
+- Route to appropriate processors
+- Send responses back to WhatsApp
+- Error handling and logging
+
+#### 2. Speech Processing (`speech-handler.ts`)
+- Download audio files from WhatsApp
+- Convert to compatible format for Azure Speech API
+- Transcribe audio to Portuguese text
+- Handle transcription errors gracefully
+- Return transcribed text for AI processing
+
+#### 3. AI Processor (`ai-processor.ts`)
+- OpenAI GPT-4o integration with function calling
+- System prompt for financial assistant behavior
+- Extract entities: amount, category, type, date, description
+- Function definitions for:
+  - `register_transaction`: Register expense/income
+  - `query_finances`: Get financial summaries
+- Context awareness and conversation flow
+- Integration with existing database storage
+
+#### 4. Message Router (`message-router.ts`)
+- Detect message types (greeting vs transaction)
+- Route audio messages to speech handler
+- Process AI responses
+- Generate appropriate user responses
+- Handle user authentication status
+
+#### 5. WhatsApp Client (`whatsapp-client.ts`)
+- Send text messages to users
+- Download audio files
+- Handle WhatsApp API authentication
+- Manage API rate limits
+
+### Database Integration
+- **Reuse existing storage functions** from `/server/storage.ts`
+- **User verification**: Check if phone number exists in `users` table
+- **Transaction creation**: Use existing `createTransaction` function
+- **Financial queries**: Use existing query functions for summaries
+- **Categories**: Map AI-detected categories to existing category IDs
+
+### AI Behavior Requirements
+
+#### System Prompt Guidelines
+```
+You are a financial assistant for FinanceFlow app.
+
+RULES:
+1. Only respond to finance-related topics
+2. For non-finance questions: "I can only help with financial matters"
+3. Always use function calling to register transactions
+4. Be friendly but concise
+5. Support Portuguese language
+
+CAPABILITIES:
+- Register expenses and income
+- Query financial summaries
+- Provide spending insights
+- Answer finance questions
+```
+
+#### Function Calling Schema
+```typescript
+const functions = [
+  {
+    name: "register_transaction",
+    description: "Register an expense or income transaction",
+    parameters: {
+      type: "object",
+      properties: {
+        amount: { type: "number" },
+        type: { type: "string", enum: ["income", "expense"] },
+        category: { type: "string" },
+        description: { type: "string" },
+        date: { type: "string", format: "date" }
+      },
+      required: ["amount", "type", "category", "description"]
+    }
+  },
+  {
+    name: "query_finances",
+    description: "Query user's financial information",
+    parameters: {
+      type: "object",
+      properties: {
+        period: { type: "string", enum: ["today", "week", "month", "year"] },
+        type: { type: "string", enum: ["summary", "expenses", "income", "balance"] }
+      }
+    }
+  }
+];
+```
+
+### User Experience Examples
+
+#### Voice Message Flow
+```
+User: [Audio] "Gastei cinquenta reais no almoço"
+Bot: "🎙️ Entendi seu áudio: 'Gastei cinquenta reais no almoço'
+     ✅ Registrado: R$ 50,00 - Alimentação - Hoje
+     Posso ajudar com mais alguma coisa?"
+```
+
+#### Text Message Flow
+```
+User: "Recebi 3000 de salário"
+Bot: "✅ Receita registrada!
+     💰 R$ 3.000,00 - Salário - Hoje
+     Sua receita total do mês: R$ 3.000,00"
+```
+
+#### Financial Query Flow
+```
+User: "Como estão minhas finanças?"
+Bot: "📊 Resumo Financeiro - Janeiro 2025
+     💰 Receitas: R$ 5.300,00
+     💸 Gastos: R$ 2.180,00
+     💚 Saldo: R$ 3.120,00
+     
+     📈 Maiores gastos:
+     1. Alimentação: R$ 850,00
+     2. Transporte: R$ 420,00"
+```
+
+### Environment Variables Required
+```env
+# Existing variables (keep current)
+DATABASE_URL=postgresql://...
+NODE_ENV=production
+PORT=5000
+
+# New bot variables
+OPENAI_API_KEY=sk-...
+AZURE_SPEECH_KEY=...
+AZURE_SPEECH_REGION=eastus
+ZAPI_BASE_URL=https://api.z-api.io/instances/...
+ZAPI_TOKEN=...
+BOT_WEBHOOK_PORT=5001
+```
+
+### Integration Points
+1. **Reuse existing authentication logic**
+2. **Reuse existing storage functions** (`createTransaction`, `getUser`, etc.)
+3. **Reuse existing category mapping**
+4. **Reuse existing database schemas**
+5. **Deploy alongside existing application**
+
+### Error Handling Requirements
+- Graceful handling of transcription failures
+- OpenAI API rate limit management
+- WhatsApp API error handling
+- Database connection error handling
+- User-friendly error messages in Portuguese
+
+### Security Considerations
+- Validate webhook signatures
+- Sanitize user inputs
+- Protect API keys
+- Rate limiting for bot interactions
+- User authentication verification
+
+### Testing Requirements
+- Unit tests for core functions
+- Integration tests with mock WhatsApp messages
+- Test with various audio formats
+- Test Portuguese language processing
+- Test edge cases and error scenarios
+
+## Expected Deliverables
+1. Complete bot implementation in TypeScript
+2. Integration with existing FinanceFlow system
+3. WhatsApp webhook handling
+4. Azure Speech API integration
+5. OpenAI GPT-4o integration with function calling
+6. Proper error handling and logging
+7. Environment configuration
+8. README with setup instructions
+
+## Success Criteria
+- Users can register transactions via WhatsApp text
+- Users can register transactions via WhatsApp voice messages
+- Bot accurately extracts financial information using AI
+- Bot integrates seamlessly with existing database
+- Bot responds only to finance-related queries
+- Bot handles Portuguese language correctly
+- System maintains existing functionality
+
+Please implement this WhatsApp AI bot following the existing code patterns and architecture of the FinanceFlow application. Ensure the bot folder integrates cleanly with the current project structure and reuses existing functions wherever possible.
