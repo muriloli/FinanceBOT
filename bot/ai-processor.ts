@@ -96,6 +96,18 @@ CATEGORIAS PADRÃO:
 - Freelance
 - Investimentos
 
+PROCESSAMENTO DE DATAS:
+Quando o usuário mencionar uma data específica, extraia e converta para formato ISO:
+- "ontem" = data de ontem
+- "anteontem" = dois dias atrás
+- "segunda passada", "terça passada", etc = último dia da semana mencionado
+- "dia 14", "dia 25" = dia específico do mês atual
+- "dia 14 do mês passado" = dia específico do mês anterior
+- "segunda-feira", "terça-feira" = próximo ou último dia da semana
+- Se não mencionar data, use a data atual
+
+IMPORTANTE: Sempre passe a data no campo 'date' como string no formato 'YYYY-MM-DD'.
+
 Quando o usuário mencionar uma transação, extraia as informações e use a função register_transaction.
 Para consultas sobre finanças, use a função query_finances.`;
   }
@@ -128,7 +140,7 @@ Para consultas sobre finanças, use a função query_finances.`;
             date: {
               type: "string",
               format: "date",
-              description: "Data da transação (opcional, padrão hoje)",
+              description: "Data da transação no formato YYYY-MM-DD. Interprete expressões como 'ontem', 'terça passada', 'dia 14', etc. Se não especificado, use hoje.",
             },
           },
           required: ["amount", "type", "category", "description"],
@@ -215,9 +227,13 @@ Para consultas sobre finanças, use a função query_finances.`;
       });
 
       const typeEmoji = data.type === 'income' ? '💰' : '💸';
+      const transactionDate = data.date ? new Date(data.date) : new Date();
+      const dateStr = this.formatDateForMessage(transactionDate);
+      
       const message = `✅ ${data.type === 'income' ? 'Receita' : 'Despesa'} registrada!
 ${typeEmoji} R$ ${data.amount.toFixed(2).replace('.', ',')} - ${data.category}
-📝 ${data.description}`;
+📝 ${data.description}
+📅 ${dateStr}`;
 
       return {
         message,
@@ -341,6 +357,32 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
         return `${now.getFullYear()}`;
       default:
         return period;
+    }
+  }
+
+  private formatDateForMessage(date: Date): string {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const isToday = date.toDateString() === today.toDateString();
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    
+    if (isToday) {
+      return 'Hoje';
+    } else if (isYesterday) {
+      return 'Ontem';
+    } else {
+      // Formatação brasileira: dd/mm/aaaa
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      
+      // Adicionar dia da semana em português
+      const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      const weekday = weekdays[date.getDay()];
+      
+      return `${weekday}, ${day}/${month}/${year}`;
     }
   }
 }
