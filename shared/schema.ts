@@ -4,13 +4,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   cpf: text("cpf").notNull(),
-  phone: text("phone").unique(),
+  phone: text("phone"),
   password: text("password").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: false }).defaultNow().notNull(),
   isActive: boolean("is_active").default(true),
   admin: boolean("admin").default(false),
 });
@@ -22,7 +22,7 @@ export const categories = pgTable("categories", {
   color: text("color"),
   icon: text("icon"),
   isDefault: boolean("is_default").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
 });
 
 export const transactions = pgTable("transactions", {
@@ -30,11 +30,11 @@ export const transactions = pgTable("transactions", {
   userId: uuid("user_id").references(() => users.id).notNull(),
   categoryId: uuid("category_id").references(() => categories.id),
   type: text("type").notNull(), // 'income' or 'expense'
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  amount: decimal("amount").notNull(), // numeric without precision specification
   description: text("description").notNull(),
-  transactionDate: timestamp("transaction_date").defaultNow().notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  transactionDate: timestamp("transaction_date", { withTimezone: false }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: false }).defaultNow().notNull(),
   source: text("source"),
 });
 
