@@ -9,9 +9,11 @@ export class AIProcessor {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       console.warn('OpenAI API key not configured. AI processing will be disabled.');
+      // Initialize with a dummy key to prevent constructor errors
+      this.openai = new OpenAI({ apiKey: 'dummy-key' });
+    } else {
+      this.openai = new OpenAI({ apiKey });
     }
-    
-    this.openai = new OpenAI({ apiKey });
   }
 
   async processMessage(message: string, userContext: UserContext): Promise<BotResponse> {
