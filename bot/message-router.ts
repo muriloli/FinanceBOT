@@ -7,7 +7,7 @@ import { storage } from '../server/storage';
 export class MessageRouter {
   private whatsappClient: WhatsAppClient;
   private speechHandler: SpeechHandler;
-  private aiProcessor: AIProcessor;
+  public aiProcessor: AIProcessor;
 
   constructor() {
     this.whatsappClient = new WhatsAppClient();

@@ -9,6 +9,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const webhookHandler = new WebhookHandler();
   app.use('/api/bot', webhookHandler.getRouter());
 
+  // Test endpoint for Postman - Process message with AI
+  app.post('/api/test/process-message', async (req, res) => {
+    try {
+      const { message, phone } = req.body;
+      
+      if (!message || !phone) {
+        return res.status(400).json({ 
+          error: 'Message and phone are required',
+          example: {
+            message: "Gastei R$ 50 no almoço no restaurante",
+            phone: "5511999999999"
+          }
+        });
+      }
+
+      // Get or create user for testing
+      let user = await storage.getUserByPhone(phone);
+      if (!user) {
+        // Create test user
+        user = await storage.createUser({
+          name: `Test User ${phone}`,
+          cpf: `${phone.slice(-11)}`,
+          phone: phone,
+          password: 'test123'
+        });
+
+        // Create default categories for new user
+        const defaultCategories = [
+          { name: 'Alimentação', type: 'expense', color: '#ff6b6b', icon: '🍽️' },
+          { name: 'Transporte', type: 'expense', color: '#4ecdc4', icon: '🚗' },
+          { name: 'Compras', type: 'expense', color: '#ffe66d', icon: '🛍️' },
+          { name: 'Lazer', type: 'expense', color: '#ff8b94', icon: '🎉' },
+          { name: 'Salário', type: 'income', color: '#95e1d3', icon: '💰' },
+          { name: 'Freelance', type: 'income', color: '#a8e6cf', icon: '💼' }
+        ];
+
+        for (const category of defaultCategories) {
+          await storage.createCategory(category);
+        }
+      }
+
+      // Process message with AI
+      const messageRouter = webhookHandler.getMessageRouter();
+      const userContext = {
+        userId: user.id,
+        phone: user.phone || '',
+        username: user.name
+      };
+
+      const aiProcessor = messageRouter.aiProcessor;
+      const response = await aiProcessor.processMessage(message, userContext);
+
+      res.json({
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          phone: user.phone
+        },
+        aiResponse: response,
+        message: "Message processed successfully"
+      });
+
+    } catch (error) {
+      console.error('Error processing test message:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // User routes
   app.get('/api/users/:id', async (req, res) => {
     try {

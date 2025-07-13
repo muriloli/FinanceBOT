@@ -63,7 +63,7 @@ export interface BotResponse {
 }
 
 export interface UserContext {
-  userId: number;
+  userId: string;
   phone: string;
   username: string;
 }
