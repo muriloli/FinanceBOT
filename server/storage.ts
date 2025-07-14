@@ -15,6 +15,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByName(name: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByPhoneContains(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   getTransactionsByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Transaction[]>;
@@ -44,7 +45,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+    // Try exact match first
+    let result = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+    
+    if (result.length === 0) {
+      // Try with LIKE pattern for partial matches
+      result = await db.select().from(users).where(sql`${users.phone} LIKE '%${phone}%'`).limit(1);
+    }
+    
+    return result[0];
+  }
+
+  async getUserByPhoneContains(phone: string): Promise<User | undefined> {
+    // Search for phone numbers that contain the given digits
+    const result = await db.select().from(users).where(sql`${users.phone} LIKE '%${phone}%'`).limit(1);
     return result[0];
   }
 

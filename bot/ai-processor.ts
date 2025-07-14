@@ -29,10 +29,17 @@ export class AIProcessor {
       // Get conversation history and summary
       const conversationContext = await this.buildConversationContext(userContext.userId);
       
+      const systemPrompt = this.getSystemPrompt() + `\n\nCONTEXTO DO USUÁRIO:
+- Nome: ${userContext.username}
+- Telefone: ${userContext.phone}
+- ID: ${userContext.userId}
+
+IMPORTANTE: Sempre chame o usuário pelo nome (${userContext.username}) nas suas respostas para personalizar a experiência.`;
+
       const messages = [
         {
           role: "system" as const,
-          content: this.getSystemPrompt(),
+          content: systemPrompt,
         },
         ...conversationContext,
         {
@@ -99,6 +106,7 @@ REGRAS:
 4. Seja amigável mas conciso
 5. Use português brasileiro
 6. Use emojis para deixar as respostas mais amigáveis
+7. SEMPRE chame o usuário pelo nome quando souber. Use o nome do contexto do usuário nas respostas.
 
 CAPACIDADES:
 - Registrar despesas e receitas

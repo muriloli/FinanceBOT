@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { WebhookHandler } from "../bot/webhook";
 import { MessageRouter } from "../bot/message-router";
+import { PhoneUtils } from '../bot/phone-utils';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize WhatsApp bot webhook handler
@@ -24,8 +25,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get or create user for testing
-      let user = await storage.getUserByPhone(phone);
+      // Get or create user for testing using improved phone search
+      const formattedPhone = PhoneUtils.formatToStandard(phone);
+      const searchPatterns = PhoneUtils.generateSearchPatterns(phone);
+      
+      console.log(`🔍 Test endpoint - searching user for phone: ${phone}`);
+      console.log(`📱 Formatted: ${formattedPhone}`);
+      console.log(`🔎 Search patterns: ${searchPatterns.join(', ')}`);
+      
+      let user = await storage.getUserByPhone(formattedPhone);
+      
+      if (!user) {
+        // Try search patterns
+        for (const pattern of searchPatterns) {
+          user = await storage.getUserByPhoneContains(pattern);
+          if (user) {
+            console.log(`✅ Found user by pattern: ${pattern} -> ${user.name}`);
+            break;
+          }
+        }
+      }
+      
       if (!user) {
         // Create test user
         user = await storage.createUser({
@@ -54,9 +74,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messageRouter = webhookHandler.getMessageRouter();
       const userContext = {
         userId: user.id,
-        phone: user.phone || '',
+        phone: user.phone || phone,
         username: user.name
       };
+      
+      console.log(`👤 Using user context: ${user.name} (${user.id}) - Phone: ${user.phone || phone}`);
 
       const aiProcessor = messageRouter.aiProcessor;
       const response = await aiProcessor.processMessage(message, userContext);

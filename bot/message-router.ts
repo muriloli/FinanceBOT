@@ -3,6 +3,7 @@ import { WhatsAppClient } from './whatsapp-client';
 import { SpeechHandler } from './speech-handler';
 import { AIProcessor } from './ai-processor';
 import { storage } from '../server/storage';
+import { PhoneUtils } from './phone-utils';
 
 export class MessageRouter {
   private whatsappClient: WhatsAppClient;
@@ -68,18 +69,46 @@ export class MessageRouter {
 
   private async getUserContext(phone: string): Promise<UserContext | null> {
     try {
-      const formattedPhone = this.whatsappClient.formatPhoneNumber(phone);
-      const user = await storage.getUserByPhone(formattedPhone);
+      // Format phone number and generate search patterns
+      const formattedPhone = PhoneUtils.formatToStandard(phone);
+      const searchPatterns = PhoneUtils.generateSearchPatterns(phone);
+      
+      console.log(`🔍 Searching user for phone: ${phone}`);
+      console.log(`📱 Formatted: ${formattedPhone}`);
+      console.log(`🔎 Search patterns: ${searchPatterns.join(', ')}`);
+      
+      let user = null;
+      
+      // Try exact match first with formatted phone
+      user = await storage.getUserByPhone(formattedPhone);
       
       if (!user) {
-        return null;
+        // Try original phone number
+        user = await storage.getUserByPhone(phone);
+      }
+      
+      if (!user) {
+        // Try search patterns one by one
+        for (const pattern of searchPatterns) {
+          user = await storage.getUserByPhoneContains(pattern);
+          if (user) {
+            console.log(`✅ Found user by pattern: ${pattern} -> ${user.name}`);
+            break;
+          }
+        }
+      }
+      
+      if (user) {
+        console.log(`👤 User found: ${user.name} (ID: ${user.id})`);
+        return {
+          userId: user.id,
+          phone: phone,
+          username: user.name,
+        };
       }
 
-      return {
-        userId: user.id,
-        phone: user.phone || formattedPhone,
-        username: user.username,
-      };
+      console.log(`❌ No user found for phone: ${phone}`);
+      return null;
     } catch (error) {
       console.error('Error getting user context:', error);
       return null;
