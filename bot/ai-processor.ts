@@ -26,38 +26,50 @@ export class AIProcessor {
         };
       }
 
+      // Get conversation history and summary
+      const conversationContext = await this.buildConversationContext(userContext.userId);
+      
+      const messages = [
+        {
+          role: "system" as const,
+          content: this.getSystemPrompt(),
+        },
+        ...conversationContext,
+        {
+          role: "user" as const,
+          content: message,
+        },
+      ];
+
       // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       const response = await this.openai.chat.completions.create({
         model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: this.getSystemPrompt(),
-          },
-          {
-            role: "user",
-            content: message,
-          },
-        ],
+        messages,
         functions: this.getFunctionDefinitions(),
         function_call: "auto",
         temperature: 0.3,
       });
 
       const responseMessage = response.choices[0].message;
+      let botResponse: BotResponse;
 
       if (responseMessage.function_call) {
-        return await this.handleFunctionCall(
+        botResponse = await this.handleFunctionCall(
           responseMessage.function_call.name,
           responseMessage.function_call.arguments,
           userContext
         );
+      } else {
+        botResponse = {
+          message: responseMessage.content || "Desculpe, não consegui processar sua mensagem.",
+          success: true,
+        };
       }
 
-      return {
-        message: responseMessage.content || "Desculpe, não consegui processar sua mensagem.",
-        success: true,
-      };
+      // Save conversation to history
+      await this.saveConversationToHistory(message, botResponse.message, userContext);
+
+      return botResponse;
     } catch (error) {
       console.error('Error processing message with AI:', error);
       return {
@@ -395,6 +407,115 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
       const weekday = weekdays[date.getDay()];
       
       return `${weekday}, ${day}/${month}/${year}`;
+    }
+  }
+
+  private async buildConversationContext(userId: string): Promise<Array<{role: 'user' | 'assistant', content: string}>> {
+    const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
+    
+    // Get conversation summary if exists
+    const summary = await storage.getConversationSummary(userId);
+    if (summary && summary.summary) {
+      messages.push({
+        role: 'assistant',
+        content: `[RESUMO DAS CONVERSAS ANTERIORES]: ${summary.summary}`
+      });
+    }
+
+    // Get recent conversations (last 5)
+    const recentConversations = await storage.getRecentConversations(userId, 5);
+    
+    // Add recent conversations in reverse order (oldest first)
+    for (const conv of recentConversations.reverse()) {
+      messages.push({
+        role: 'user',
+        content: conv.userMessage
+      });
+      messages.push({
+        role: 'assistant',
+        content: conv.botResponse
+      });
+    }
+
+    return messages;
+  }
+
+  private async saveConversationToHistory(userMessage: string, botResponse: string, userContext: UserContext): Promise<void> {
+    try {
+      // Determine message type
+      let messageType = 'chat';
+      if (userMessage.toLowerCase().includes('gastei') || userMessage.toLowerCase().includes('recebi') || 
+          userMessage.toLowerCase().includes('r$') || userMessage.toLowerCase().includes('real')) {
+        messageType = 'transaction';
+      } else if (userMessage.toLowerCase().includes('saldo') || userMessage.toLowerCase().includes('resumo') ||
+                 userMessage.toLowerCase().includes('gastos') || userMessage.toLowerCase().includes('receitas')) {
+        messageType = 'query';
+      }
+
+      // Save current conversation
+      await storage.saveConversation({
+        userId: userContext.userId,
+        phone: userContext.phone,
+        userMessage,
+        botResponse,
+        messageType
+      });
+
+      // Get total conversation count
+      const allConversations = await storage.getRecentConversations(userContext.userId, 100);
+      
+      // If we have more than 10 conversations, create/update summary and clean old ones
+      if (allConversations.length > 10) {
+        await this.updateConversationSummary(userContext.userId, allConversations);
+        await storage.deleteOldConversations(userContext.userId, 5); // Keep only last 5
+      }
+    } catch (error) {
+      console.error('Error saving conversation to history:', error);
+      // Don't fail the main conversation if history saving fails
+    }
+  }
+
+  private async updateConversationSummary(userId: string, conversations: any[]): Promise<void> {
+    try {
+      // Get conversations older than the last 5 for summarization
+      const conversationsToSummarize = conversations.slice(5);
+      
+      if (conversationsToSummarize.length === 0) return;
+
+      // Create summary of older conversations
+      const conversationText = conversationsToSummarize
+        .map(conv => `Usuário: ${conv.userMessage}\nBot: ${conv.botResponse}`)
+        .join('\n\n');
+
+      const summaryPrompt = `Crie um resumo conciso das seguintes conversas financeiras, destacando:
+- Principais transações registradas
+- Padrões de gastos do usuário
+- Categorias mais usadas
+- Questões recorrentes
+
+Conversas:
+${conversationText}
+
+Resumo (máximo 200 palavras):`;
+
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: summaryPrompt,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+      });
+
+      const summary = response.choices[0].message.content || '';
+      
+      // Update summary in database
+      await storage.updateConversationSummary(userId, summary, conversationsToSummarize.length);
+    } catch (error) {
+      console.error('Error updating conversation summary:', error);
     }
   }
 }

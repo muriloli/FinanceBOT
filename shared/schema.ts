@@ -38,6 +38,25 @@ export const transactions = pgTable("transactions", {
   source: text("source"),
 });
 
+export const conversationHistory = pgTable("conversation_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  phone: text("phone").notNull(),
+  userMessage: text("user_message").notNull(),
+  botResponse: text("bot_response").notNull(),
+  messageType: text("message_type").notNull().default('chat'), // 'chat', 'transaction', 'query'
+  createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
+});
+
+export const conversationSummary = pgTable("conversation_summary", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  phone: text("phone").notNull(),
+  summary: text("summary").notNull(),
+  messageCount: integer("message_count").default(0),
+  lastUpdated: timestamp("last_updated", { withTimezone: false }).defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -57,9 +76,23 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
   updatedAt: true,
 });
 
+export const insertConversationHistorySchema = createInsertSchema(conversationHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertConversationSummarySchema = createInsertSchema(conversationSummary).omit({
+  id: true,
+  lastUpdated: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
+export type InsertConversationHistory = z.infer<typeof insertConversationHistorySchema>;
+export type ConversationHistory = typeof conversationHistory.$inferSelect;
+export type InsertConversationSummary = z.infer<typeof insertConversationSummarySchema>;
+export type ConversationSummary = typeof conversationSummary.$inferSelect;

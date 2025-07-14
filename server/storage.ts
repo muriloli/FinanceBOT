@@ -1,4 +1,4 @@
-import { users, categories, transactions, type User, type InsertUser, type Category, type InsertCategory, type Transaction, type InsertTransaction } from "@shared/schema";
+import { users, categories, transactions, conversationHistory, conversationSummary, type User, type InsertUser, type Category, type InsertCategory, type Transaction, type InsertTransaction, type ConversationHistory, type InsertConversationHistory, type ConversationSummary, type InsertConversationSummary } from "@shared/schema";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq, desc, and, gte, lte, sql, type SQL } from "drizzle-orm";
@@ -23,6 +23,13 @@ export interface IStorage {
   getCategories(userId?: string): Promise<Category[]>;
   getCategoryByName(name: string, userId?: string): Promise<Category | undefined>;
   createCategory(category: InsertCategory): Promise<Category>;
+  
+  // Conversation History
+  saveConversation(conversation: InsertConversationHistory): Promise<ConversationHistory>;
+  getRecentConversations(userId: string, limit?: number): Promise<ConversationHistory[]>;
+  getConversationSummary(userId: string): Promise<ConversationSummary | undefined>;
+  updateConversationSummary(userId: string, summary: string, messageCount: number): Promise<ConversationSummary>;
+  deleteOldConversations(userId: string, keepCount: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -122,6 +129,78 @@ export class DatabaseStorage implements IStorage {
   async createCategory(category: InsertCategory): Promise<Category> {
     const result = await db.insert(categories).values(category).returning();
     return result[0];
+  }
+
+  // Conversation History Methods
+  async saveConversation(conversation: InsertConversationHistory): Promise<ConversationHistory> {
+    const result = await db.insert(conversationHistory).values(conversation).returning();
+    return result[0];
+  }
+
+  async getRecentConversations(userId: string, limit: number = 5): Promise<ConversationHistory[]> {
+    return db.select()
+      .from(conversationHistory)
+      .where(eq(conversationHistory.userId, userId))
+      .orderBy(desc(conversationHistory.createdAt))
+      .limit(limit);
+  }
+
+  async getConversationSummary(userId: string): Promise<ConversationSummary | undefined> {
+    const result = await db.select()
+      .from(conversationSummary)
+      .where(eq(conversationSummary.userId, userId))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateConversationSummary(userId: string, summary: string, messageCount: number): Promise<ConversationSummary> {
+    // Try to update existing summary
+    const existing = await this.getConversationSummary(userId);
+    
+    if (existing) {
+      const result = await db.update(conversationSummary)
+        .set({ 
+          summary, 
+          messageCount, 
+          lastUpdated: new Date() 
+        })
+        .where(eq(conversationSummary.userId, userId))
+        .returning();
+      return result[0];
+    } else {
+      // Create new summary
+      const result = await db.insert(conversationSummary)
+        .values({
+          userId,
+          phone: '', // Will be updated when we have the phone
+          summary,
+          messageCount
+        })
+        .returning();
+      return result[0];
+    }
+  }
+
+  async deleteOldConversations(userId: string, keepCount: number): Promise<void> {
+    // Get the IDs of conversations to keep (most recent ones)
+    const conversationsToKeep = await db.select({ id: conversationHistory.id })
+      .from(conversationHistory)
+      .where(eq(conversationHistory.userId, userId))
+      .orderBy(desc(conversationHistory.createdAt))
+      .limit(keepCount);
+
+    if (conversationsToKeep.length === 0) return;
+
+    const idsToKeep = conversationsToKeep.map(c => c.id);
+    
+    // Delete conversations that are not in the keep list
+    await db.delete(conversationHistory)
+      .where(
+        and(
+          eq(conversationHistory.userId, userId),
+          sql`${conversationHistory.id} NOT IN (${sql.join(idsToKeep.map(id => sql`${id}`), sql`, `)})`
+        )
+      );
   }
 }
 
