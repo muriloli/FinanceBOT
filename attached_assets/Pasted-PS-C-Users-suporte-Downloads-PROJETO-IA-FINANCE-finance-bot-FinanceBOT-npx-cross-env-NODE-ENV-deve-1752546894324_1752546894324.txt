@@ -1,0 +1,152 @@
+PS C:\Users\suporte\Downloads\PROJETO_IA_FINANCE\finance-bot\FinanceBOT> npx cross-env NODE_ENV=development tsx server/index.ts
+WhatsApp API credentials not configured. Bot will run in mock mode.
+Azure Speech API key not configured. Speech recognition will be disabled.
+Webhook secret configured: financeflow-webhook-secret
+10:30:55 PM [express] serving on localhost:5000
+Processing message: msg_test_001
+🔍 Searching user for phone: 5566996726332
+📱 Formatted: 5566996726332
+🔎 Search patterns: 5566996726332, 996726332, 66996726332
+❌ No user found for phone: 5566996726332
+Mock WhatsApp message to 5566996726332: 👋 Olá! Parece que você ainda não está cadastrado no FinanceFlow.
+
+Para usar o bot, você precisa:
+1. Fazer login no app FinanceFlow
+2. Cadastrar este número de telefone em seu perfil
+3. Voltar aqui e enviar uma mensagem
+
+Após isso, poderei ajudar você a gerenciar suas finanças! 💰
+10:31:01 PM [express] POST /api/bot/webhook/whatsapp 200 in 608ms
+Processing message: msg_test_001
+🔍 Searching user for phone: 556696716331
+📱 Formatted: 5566996716331
+🔎 Search patterns: 5566996716331, 556696716331, 696716331, 66996716331
+👤 User found: Murilo Lima (ID: b3bda624-4769-4667-a24d-cfc02d3aef0e)
+Mock WhatsApp typing indicator to 556696716331
+Error processing message with AI: PostgresError: relation "conversation_summary" does not exist
+    at ErrorResponse (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:794:26)
+    at handle (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:480:6)
+    at Socket.data (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:315:9)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '82',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+Mock WhatsApp message to 556696716331: 😔 Ocorreu um erro ao processar sua mensagem. Tente novamente.
+10:31:30 PM [express] POST /api/bot/webhook/whatsapp 200 in 71ms
+Processing message: msg_test_001
+🔍 Searching user for phone: 556696716331
+📱 Formatted: 5566996716331
+🔎 Search patterns: 5566996716331, 556696716331, 696716331, 66996716331
+👤 User found: Murilo Lima (ID: b3bda624-4769-4667-a24d-cfc02d3aef0e)
+Mock WhatsApp typing indicator to 556696716331
+Error processing message with AI: PostgresError: relation "conversation_summary" does not exist
+    at ErrorResponse (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:794:26)
+    at handle (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:480:6)
+    at Socket.data (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:315:9)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '82',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+Mock WhatsApp message to 556696716331: 😔 Ocorreu um erro ao processar sua mensagem. Tente novamente.
+10:31:46 PM [express] POST /api/bot/webhook/whatsapp 200 in 66ms
+Processing message: msg_test_001
+🔍 Searching user for phone: 556696716332
+📱 Formatted: 5566996716332
+🔎 Search patterns: 5566996716332, 556696716332, 696716332, 66996716332
+❌ No user found for phone: 556696716332
+Mock WhatsApp message to 556696716332: 👋 Olá! Parece que você ainda não está cadastrado no FinanceFlow.
+
+Para usar o bot, você precisa:
+1. Fazer login no app FinanceFlow
+2. Cadastrar este número de telefone em seu perfil
+3. Voltar aqui e enviar uma mensagem
+
+Após isso, poderei ajudar você a gerenciar suas finanças! 💰
+10:31:53 PM [express] POST /api/bot/webhook/whatsapp 200 in 340ms
+Processing message: msg_test_001
+🔍 Searching user for phone: 556696716332
+📱 Formatted: 5566996716332
+🔎 Search patterns: 5566996716332, 556696716332, 696716332, 66996716332
+❌ No user found for phone: 556696716332
+Mock WhatsApp message to 556696716332: 👋 Olá! Parece que você ainda não está cadastrado no FinanceFlow.
+
+Para usar o bot, você precisa:
+1. Fazer login no app FinanceFlow
+2. Cadastrar este número de telefone em seu perfil
+3. Voltar aqui e enviar uma mensagem
+
+Após isso, poderei ajudar você a gerenciar suas finanças! 💰
+10:32:08 PM [express] POST /api/bot/webhook/whatsapp 200 in 342ms
+Processing message: msg_test_001
+🔍 Searching user for phone: 556696716332
+📱 Formatted: 5566996716332
+🔎 Search patterns: 5566996716332, 556696716332, 696716332, 66996716332
+👤 User found: Murilo Lima (ID: b3bda624-4769-4667-a24d-cfc02d3aef0e)
+Mock WhatsApp typing indicator to 556696716332
+Error processing message with AI: PostgresError: relation "conversation_summary" does not exist
+    at ErrorResponse (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:794:26)
+    at handle (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:480:6)
+    at Socket.data (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:315:9)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '82',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+Mock WhatsApp message to 556696716332: 😔 Ocorreu um erro ao processar sua mensagem. Tente novamente.
+10:32:47 PM [express] POST /api/bot/webhook/whatsapp 200 in 150ms
+PS C:\Users\suporte\Downloads\PROJETO_IA_FINANCE\finance-bot\FinanceBOT> npx cross-env NODE_ENV=development tsx server/index.ts
+WhatsApp API credentials not configured. Bot will run in mock mode.
+Azure Speech API key not configured. Speech recognition will be disabled.
+Webhook secret configured: financeflow-webhook-secret
+10:33:04 PM [express] serving on localhost:5000
+Processing message: msg_test_001
+🔍 Searching user for phone: 556696716332
+📱 Formatted: 5566996716332
+🔎 Search patterns: 5566996716332, 556696716332, 696716332, 66996716332
+👤 User found: Murilo Lima (ID: b3bda624-4769-4667-a24d-cfc02d3aef0e)
+Mock WhatsApp typing indicator to 556696716332
+Error processing message with AI: PostgresError: relation "conversation_summary" does not exist
+    at ErrorResponse (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:794:26)
+    at handle (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:480:6)
+    at Socket.data (file:///C:/Users/suporte/Downloads/PROJETO_IA_FINANCE/finance-bot/FinanceBOT/node_modules/postgres/src/connection.js:315:9)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '82',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+Mock WhatsApp message to 556696716332: 😔 Ocorreu um erro ao processar sua mensagem. Tente novamente.
+10:33:18 PM [express] POST /api/bot/webhook/whatsapp 200 in 349ms

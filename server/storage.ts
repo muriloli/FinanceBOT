@@ -147,74 +147,99 @@ export class DatabaseStorage implements IStorage {
 
   // Conversation History Methods
   async saveConversation(conversation: InsertConversationHistory): Promise<ConversationHistory> {
-    const result = await db.insert(conversationHistory).values(conversation).returning();
-    return result[0];
+    try {
+      const result = await db.insert(conversationHistory).values(conversation).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error saving conversation (table may not exist):', error);
+      throw error;
+    }
   }
 
   async getRecentConversations(userId: string, limit: number = 5): Promise<ConversationHistory[]> {
-    return db.select()
-      .from(conversationHistory)
-      .where(eq(conversationHistory.userId, userId))
-      .orderBy(desc(conversationHistory.createdAt))
-      .limit(limit);
+    try {
+      return db.select()
+        .from(conversationHistory)
+        .where(eq(conversationHistory.userId, userId))
+        .orderBy(desc(conversationHistory.createdAt))
+        .limit(limit);
+    } catch (error) {
+      console.error('Error getting recent conversations (table may not exist):', error);
+      return [];
+    }
   }
 
   async getConversationSummary(userId: string): Promise<ConversationSummary | undefined> {
-    const result = await db.select()
-      .from(conversationSummary)
-      .where(eq(conversationSummary.userId, userId))
-      .limit(1);
-    return result[0];
+    try {
+      const result = await db.select()
+        .from(conversationSummary)
+        .where(eq(conversationSummary.userId, userId))
+        .limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting conversation summary (table may not exist):', error);
+      return undefined;
+    }
   }
 
   async updateConversationSummary(userId: string, summary: string, messageCount: number): Promise<ConversationSummary> {
-    // Try to update existing summary
-    const existing = await this.getConversationSummary(userId);
-    
-    if (existing) {
-      const result = await db.update(conversationSummary)
-        .set({ 
-          summary, 
-          messageCount, 
-          lastUpdated: new Date() 
-        })
-        .where(eq(conversationSummary.userId, userId))
-        .returning();
-      return result[0];
-    } else {
-      // Create new summary
-      const result = await db.insert(conversationSummary)
-        .values({
-          userId,
-          phone: '', // Will be updated when we have the phone
-          summary,
-          messageCount
-        })
-        .returning();
-      return result[0];
+    try {
+      // Try to update existing summary
+      const existing = await this.getConversationSummary(userId);
+      
+      if (existing) {
+        const result = await db.update(conversationSummary)
+          .set({ 
+            summary, 
+            messageCount, 
+            lastUpdated: new Date() 
+          })
+          .where(eq(conversationSummary.userId, userId))
+          .returning();
+        return result[0];
+      } else {
+        // Create new summary
+        const result = await db.insert(conversationSummary)
+          .values({
+            userId,
+            phone: '', // Will be updated when we have the phone
+            summary,
+            messageCount
+          })
+          .returning();
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Error updating conversation summary (table may not exist):', error);
+      throw error;
     }
   }
 
   async deleteOldConversations(userId: string, keepCount: number): Promise<void> {
-    // Get the IDs of conversations to keep (most recent ones)
-    const conversationsToKeep = await db.select({ id: conversationHistory.id })
-      .from(conversationHistory)
-      .where(eq(conversationHistory.userId, userId))
-      .orderBy(desc(conversationHistory.createdAt))
-      .limit(keepCount);
+    try {
+      // Get the IDs of conversations to keep (most recent ones)
+      const conversationsToKeep = await db.select({ id: conversationHistory.id })
+        .from(conversationHistory)
+        .where(eq(conversationHistory.userId, userId))
+        .orderBy(desc(conversationHistory.createdAt))
+        .limit(keepCount);
 
-    if (conversationsToKeep.length === 0) return;
+      if (conversationsToKeep.length === 0) return;
 
-    const idsToKeep = conversationsToKeep.map(c => c.id);
-    
-    // Delete conversations that are not in the keep list
-    await db.delete(conversationHistory)
-      .where(
-        and(
-          eq(conversationHistory.userId, userId),
-          sql`${conversationHistory.id} NOT IN (${sql.join(idsToKeep.map(id => sql`${id}`), sql`, `)})`
-        )
-      );
+      const idsToKeep = conversationsToKeep.map(c => c.id);
+      
+      // Delete conversations that are not in the keep list
+      await db.delete(conversationHistory)
+        .where(
+          and(
+            eq(conversationHistory.userId, userId),
+            sql`${conversationHistory.id} NOT IN (${sql.join(idsToKeep.map(id => sql`${id}`), sql`, `)})`
+          )
+        );
+    } catch (error) {
+      console.error('Error deleting old conversations (table may not exist):', error);
+      // Continue without failing if table doesn't exist
+    }
   }
 }
 

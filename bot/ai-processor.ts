@@ -421,28 +421,33 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
   private async buildConversationContext(userId: string): Promise<Array<{role: 'user' | 'assistant', content: string}>> {
     const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
     
-    // Get conversation summary if exists
-    const summary = await storage.getConversationSummary(userId);
-    if (summary && summary.summary) {
-      messages.push({
-        role: 'assistant',
-        content: `[RESUMO DAS CONVERSAS ANTERIORES]: ${summary.summary}`
-      });
-    }
+    try {
+      // Get conversation summary if exists
+      const summary = await storage.getConversationSummary(userId);
+      if (summary && summary.summary) {
+        messages.push({
+          role: 'assistant',
+          content: `[RESUMO DAS CONVERSAS ANTERIORES]: ${summary.summary}`
+        });
+      }
 
-    // Get recent conversations (last 5)
-    const recentConversations = await storage.getRecentConversations(userId, 5);
-    
-    // Add recent conversations in reverse order (oldest first)
-    for (const conv of recentConversations.reverse()) {
-      messages.push({
-        role: 'user',
-        content: conv.userMessage
-      });
-      messages.push({
-        role: 'assistant',
-        content: conv.botResponse
-      });
+      // Get recent conversations (last 5)
+      const recentConversations = await storage.getRecentConversations(userId, 5);
+      
+      // Add recent conversations in reverse order (oldest first)
+      for (const conv of recentConversations.reverse()) {
+        messages.push({
+          role: 'user',
+          content: conv.userMessage
+        });
+        messages.push({
+          role: 'assistant',
+          content: conv.botResponse
+        });
+      }
+    } catch (error) {
+      console.error('Error building conversation context (using fallback):', error);
+      // Continue without conversation history if tables don't exist
     }
 
     return messages;
@@ -478,8 +483,9 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
         await storage.deleteOldConversations(userContext.userId, 5); // Keep only last 5
       }
     } catch (error) {
-      console.error('Error saving conversation to history:', error);
+      console.error('Error saving conversation to history (conversation will work without history):', error);
       // Don't fail the main conversation if history saving fails
+      // This allows the bot to work even without conversation_history and conversation_summary tables
     }
   }
 
