@@ -21,7 +21,7 @@ export class AIProcessor {
       // Check if OpenAI API key is configured
       if (!process.env.OPENAI_API_KEY) {
         // Handle basic greetings and simple interactions without AI
-        return this.handleBasicMessage(message, userContext);
+        return await this.handleBasicMessage(message, userContext);
       }
 
       // Get conversation history and summary
@@ -84,7 +84,7 @@ IMPORTANTE: Sempre chame o usuário pelo nome (${userContext.username}) nas suas
     }
   }
 
-  private handleBasicMessage(message: string, userContext: UserContext): BotResponse {
+  private async handleBasicMessage(message: string, userContext: UserContext): Promise<BotResponse> {
     const text = message.toLowerCase().trim();
     const { username } = userContext;
     
@@ -129,6 +129,23 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
       };
     }
     
+    // Check for financial queries first
+    console.log('🔍 Checking for financial queries...');
+    const financialQuery = this.parseBasicFinancialQuery(text);
+    if (financialQuery) {
+      console.log('✅ Financial query found:', financialQuery);
+      try {
+        const result = await this.queryFinances(financialQuery, userContext);
+        return result;
+      } catch (error) {
+        console.error('Error in financial query:', error);
+        return {
+          message: "😔 Erro ao consultar suas finanças. Tente novamente.",
+          success: false,
+        };
+      }
+    }
+
     // Try basic transaction parsing without AI
     console.log('🔍 Attempting basic transaction parsing...');
     const basicTransaction = this.parseBasicTransaction(text);
@@ -225,6 +242,55 @@ Mas posso ajudar! ${username}, você pode me dizer:
     }
 
     return null;
+  }
+
+  private parseBasicFinancialQuery(text: string): FinancialQuery | null {
+    console.log('🔍 Parsing financial query:', text);
+    
+    // Patterns for financial queries
+    const patterns = {
+      today: /(gastos?|despesas?)\s+(?:de\s+)?hoje|hoje.*?(gastos?|despesas?)|quanto\s+gastei\s+hoje|meus\s+gastos?\s+(?:de\s+)?hoje/i,
+      yesterday: /(gastos?|despesas?)\s+(?:de\s+)?ontem|ontem.*?(gastos?|despesas?)|quanto\s+gastei\s+ontem/i,
+      week: /(gastos?|despesas?)\s+(?:da|desta|esta)\s+semana|semana.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:esta|desta)\s+semana/i,
+      month: /(gastos?|despesas?)\s+(?:do|deste|este)\s+m[eê]s|m[eê]s.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:este|neste)\s+m[eê]s/i,
+      expenses: /(gastos?|despesas?)/i,
+      income: /(receitas?|ganhos?|rendas?)/i
+    };
+
+    let period: 'today' | 'yesterday' | 'week' | 'month' = 'today';
+    let type: 'expenses' | 'income' | 'summary' = 'expenses';
+
+    // Determine period
+    if (patterns.yesterday.test(text)) {
+      period = 'yesterday';
+    } else if (patterns.week.test(text)) {
+      period = 'week';
+    } else if (patterns.month.test(text)) {
+      period = 'month';
+    } else if (patterns.today.test(text)) {
+      period = 'today';
+    } else {
+      // If no clear period found and it's asking about expenses/income, default to today
+      if (patterns.expenses.test(text) || patterns.income.test(text)) {
+        period = 'today';
+      } else {
+        return null;
+      }
+    }
+
+    // Determine type
+    if (patterns.income.test(text)) {
+      type = 'income';
+    } else if (patterns.expenses.test(text)) {
+      type = 'expenses';
+    }
+
+    console.log('✅ Financial query parsed:', { period, type });
+
+    return {
+      period,
+      type,
+    };
   }
 
   private getTodayDate(): string {
@@ -793,8 +859,16 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
         if (transactions.length > 0) {
           message += '\n\n📋 Transações:';
           transactions.slice(0, 10).forEach(t => {
-            const date = new Date(t.transactionDate);
-            const dateStr = this.formatDateForMessage(date);
+            let dateStr = 'Data inválida';
+            try {
+              // Verificar e converter a data da transação
+              const date = t.transactionDate instanceof Date ? t.transactionDate : new Date(t.transactionDate);
+              if (!isNaN(date.getTime())) {
+                dateStr = this.formatDateForMessage(date);
+              }
+            } catch (error) {
+              console.error('🚨 Error formatting transaction date:', error, 'Transaction date:', t.transactionDate);
+            }
             message += `\n• R$ ${Number(t.amount).toFixed(2).replace('.', ',')} - ${t.description} (${dateStr})`;
           });
           
@@ -1010,6 +1084,12 @@ ${typeEmoji} R$ ${comparisonTotal.toFixed(2).replace('.', ',')}
   }
 
   private formatDateForMessage(date: Date): string {
+    // Verificar se a data é válida
+    if (!date || isNaN(date.getTime())) {
+      console.error('🚨 formatDateForMessage - Invalid date received:', date);
+      return 'Data inválida';
+    }
+    
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);

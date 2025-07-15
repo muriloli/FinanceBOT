@@ -48,11 +48,116 @@ export interface IStorage {
 
 // Mock storage for development when database is not available
 class MockStorage implements IStorage {
+  private static instance: MockStorage;
+  
+  static getInstance(): MockStorage {
+    if (!MockStorage.instance) {
+      MockStorage.instance = new MockStorage();
+      MockStorage.instance.initializeTestData();
+    }
+    return MockStorage.instance;
+  }
+  
   private mockUsers: User[] = [];
   private mockTransactions: Transaction[] = [];
   private mockCategories: Category[] = [];
   private mockConversations: ConversationHistory[] = [];
   private mockSummaries: ConversationSummary[] = [];
+
+  private initializeTestData() {
+    // Criar usuário de teste
+    const testUser: User = {
+      id: "b3bda624-4769-4667-a24d-cfc02d3aef0e",
+      name: "Murilo Lima",
+      cpf: "12345678901",
+      phone: "556696716332",
+      password: "password123",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      admin: false,
+    };
+    this.mockUsers.push(testUser);
+
+    // Criar algumas categorias de teste
+    const testCategories: Category[] = [
+      {
+        id: "cat-1",
+        name: "Alimentação",
+        type: "expense",
+        color: "#FF6B6B",
+        icon: "🍔",
+        isDefault: true,
+        createdAt: new Date(),
+      },
+      {
+        id: "cat-2", 
+        name: "Transporte",
+        type: "expense",
+        color: "#4ECDC4",
+        icon: "🚗",
+        isDefault: true,
+        createdAt: new Date(),
+      },
+      {
+        id: "cat-3",
+        name: "Salário",
+        type: "income",
+        color: "#45B7D1",
+        icon: "💰",
+        isDefault: true,
+        createdAt: new Date(),
+      }
+    ];
+    this.mockCategories.push(...testCategories);
+
+    // Criar algumas transações de teste para hoje
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const testTransactions: Transaction[] = [
+      {
+        id: "trans-1",
+        userId: testUser.id,
+        categoryId: "cat-1",
+        type: "expense",
+        amount: "25.50",
+        description: "Almoço no restaurante",
+        transactionDate: today,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-2",
+        userId: testUser.id,
+        categoryId: "cat-2",
+        type: "expense", 
+        amount: "15.00",
+        description: "Uber para o trabalho",
+        transactionDate: today,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-3",
+        userId: testUser.id,
+        categoryId: "cat-1",
+        type: "expense",
+        amount: "8.50",
+        description: "Café da manhã",
+        transactionDate: yesterday,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      }
+    ];
+    this.mockTransactions.push(...testTransactions);
+
+    console.log("🎯 Mock data initialized with user:", testUser.name, "and", testTransactions.length, "transactions");
+  }
 
   async getUser(id: string): Promise<User | undefined> {
     return this.mockUsers.find(u => u.id === id);
@@ -95,11 +200,36 @@ class MockStorage implements IStorage {
   }
 
   async getTransactionsByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Transaction[]> {
-    return this.mockTransactions.filter(t => t.userId === userId);
+    let filtered = this.mockTransactions.filter(t => t.userId === userId);
+    
+    if (startDate && endDate) {
+      filtered = filtered.filter(t => {
+        const transactionDate = new Date(t.transactionDate);
+        return transactionDate >= startDate && transactionDate <= endDate;
+      });
+    }
+    
+    return filtered.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
   }
 
   async getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date, category?: string): Promise<Transaction[]> {
-    return this.mockTransactions.filter(t => t.userId === userId && t.type === type);
+    let filtered = this.mockTransactions.filter(t => t.userId === userId && t.type === type);
+    
+    if (startDate && endDate) {
+      filtered = filtered.filter(t => {
+        const transactionDate = new Date(t.transactionDate);
+        return transactionDate >= startDate && transactionDate <= endDate;
+      });
+    }
+    
+    if (category) {
+      filtered = filtered.filter(t => {
+        // Implementar lógica de categoria quando necessário
+        return true;
+      });
+    }
+    
+    return filtered.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
   }
 
   async getUserBalance(userId: string, startDate?: Date, endDate?: Date): Promise<{ income: number; expense: number; balance: number }> {
@@ -177,18 +307,22 @@ class MockStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private mockStorage = MockStorage.getInstance();
+
   async getUser(id: string): Promise<User | undefined> {
-    if (!isDbConnected) return new MockStorage().getUser(id);
+    if (!isDbConnected) return this.mockStorage.getUser(id);
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0];
   }
 
   async getUserByName(name: string): Promise<User | undefined> {
+    if (!isDbConnected) return this.mockStorage.getUserByName(name);
     const result = await db.select().from(users).where(eq(users.name, name)).limit(1);
     return result[0];
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
+    if (!isDbConnected) return this.mockStorage.getUserByPhone(phone);
     // Try exact match first
     let result = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
     
@@ -201,22 +335,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPhoneContains(phone: string): Promise<User | undefined> {
+    if (!isDbConnected) return this.mockStorage.getUserByPhoneContains(phone);
     // Search for phone numbers that contain the given digits
     const result = await db.select().from(users).where(like(users.phone, `%${phone}%`)).limit(1);
     return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    if (!isDbConnected) return this.mockStorage.createUser(insertUser);
     const result = await db.insert(users).values(insertUser).returning();
     return result[0];
   }
 
   async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+    if (!isDbConnected) return this.mockStorage.createTransaction(transaction);
     const result = await db.insert(transactions).values([transaction]).returning();
     return result[0];
   }
 
   async getTransactionsByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Transaction[]> {
+    if (!isDbConnected) return this.mockStorage.getTransactionsByUser(userId, startDate, endDate);
     let whereClause: SQL<unknown> = eq(transactions.userId, userId);
     
     if (startDate && endDate) {
@@ -231,6 +369,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date, category?: string): Promise<Transaction[]> {
+    if (!isDbConnected) return this.mockStorage.getTransactionsByUserAndType(userId, type, startDate, endDate, category);
     let conditions = [
       eq(transactions.userId, userId),
       eq(transactions.type, type)
