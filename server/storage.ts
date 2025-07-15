@@ -3,13 +3,26 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq, desc, and, gte, lte, sql, type SQL, like, or } from "drizzle-orm";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not set");
-}
+let db: any;
+let isDbConnected = false;
 
-const client = postgres(connectionString);
-const db = drizzle(client);
+try {
+  const connectionString = process.env.DATABASE_URL;
+  if (connectionString) {
+    const client = postgres(connectionString);
+    db = drizzle(client);
+    isDbConnected = true;
+    console.log("Database connected successfully");
+  } else {
+    console.warn("DATABASE_URL not set, using mock database for development");
+    db = null;
+    isDbConnected = false;
+  }
+} catch (error) {
+  console.error("Database connection failed:", error);
+  isDbConnected = false;
+  db = null;
+}
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -33,8 +46,139 @@ export interface IStorage {
   deleteOldConversations(userId: string, keepCount: number): Promise<void>;
 }
 
+// Mock storage for development when database is not available
+class MockStorage implements IStorage {
+  private mockUsers: User[] = [];
+  private mockTransactions: Transaction[] = [];
+  private mockCategories: Category[] = [];
+  private mockConversations: ConversationHistory[] = [];
+  private mockSummaries: ConversationSummary[] = [];
+
+  async getUser(id: string): Promise<User | undefined> {
+    return this.mockUsers.find(u => u.id === id);
+  }
+
+  async getUserByName(name: string): Promise<User | undefined> {
+    return this.mockUsers.find(u => u.name === name);
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    return this.mockUsers.find(u => u.phone === phone);
+  }
+
+  async getUserByPhoneContains(phone: string): Promise<User | undefined> {
+    return this.mockUsers.find(u => u.phone?.includes(phone));
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const newUser: User = {
+      id: Math.random().toString(),
+      ...user,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      admin: false,
+    };
+    this.mockUsers.push(newUser);
+    return newUser;
+  }
+
+  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+    const newTransaction: Transaction = {
+      id: Math.random().toString(),
+      ...transaction,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.mockTransactions.push(newTransaction);
+    return newTransaction;
+  }
+
+  async getTransactionsByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Transaction[]> {
+    return this.mockTransactions.filter(t => t.userId === userId);
+  }
+
+  async getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date, category?: string): Promise<Transaction[]> {
+    return this.mockTransactions.filter(t => t.userId === userId && t.type === type);
+  }
+
+  async getUserBalance(userId: string, startDate?: Date, endDate?: Date): Promise<{ income: number; expense: number; balance: number }> {
+    const userTransactions = this.mockTransactions.filter(t => t.userId === userId);
+    const income = userTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    const expense = userTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    return { income, expense, balance: income - expense };
+  }
+
+  async getCategories(userId?: string): Promise<Category[]> {
+    return this.mockCategories;
+  }
+
+  async getCategoryByName(name: string, userId?: string): Promise<Category | undefined> {
+    return this.mockCategories.find(c => c.name === name);
+  }
+
+  async createCategory(category: InsertCategory): Promise<Category> {
+    const newCategory: Category = {
+      id: Math.random().toString(),
+      ...category,
+      createdAt: new Date(),
+    };
+    this.mockCategories.push(newCategory);
+    return newCategory;
+  }
+
+  async saveConversation(conversation: InsertConversationHistory): Promise<ConversationHistory> {
+    const newConversation: ConversationHistory = {
+      id: Math.random().toString(),
+      ...conversation,
+      createdAt: new Date(),
+    };
+    this.mockConversations.push(newConversation);
+    return newConversation;
+  }
+
+  async getRecentConversations(userId: string, limit: number = 5): Promise<ConversationHistory[]> {
+    return this.mockConversations.filter(c => c.userId === userId).slice(-limit);
+  }
+
+  async getConversationSummary(userId: string): Promise<ConversationSummary | undefined> {
+    return this.mockSummaries.find(s => s.userId === userId);
+  }
+
+  async updateConversationSummary(userId: string, summary: string, messageCount: number): Promise<ConversationSummary> {
+    const existing = this.mockSummaries.find(s => s.userId === userId);
+    if (existing) {
+      existing.summary = summary;
+      existing.messageCount = messageCount;
+      existing.lastUpdated = new Date();
+      return existing;
+    }
+    const newSummary: ConversationSummary = {
+      id: Math.random().toString(),
+      userId,
+      phone: '',
+      summary,
+      messageCount,
+      lastUpdated: new Date(),
+    };
+    this.mockSummaries.push(newSummary);
+    return newSummary;
+  }
+
+  async deleteOldConversations(userId: string, keepCount: number): Promise<void> {
+    const userConversations = this.mockConversations.filter(c => c.userId === userId);
+    if (userConversations.length > keepCount) {
+      userConversations.slice(0, -keepCount).forEach(conv => {
+        const index = this.mockConversations.indexOf(conv);
+        if (index > -1) this.mockConversations.splice(index, 1);
+      });
+    }
+  }
+}
+
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
+    if (!isDbConnected) return new MockStorage().getUser(id);
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0];
   }
