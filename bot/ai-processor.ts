@@ -129,6 +129,22 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
       };
     }
     
+    // Try basic transaction parsing without AI
+    console.log('🔍 Attempting basic transaction parsing...');
+    const basicTransaction = this.parseBasicTransaction(text);
+    if (basicTransaction) {
+      console.log('✅ Basic transaction found, but async processing needed');
+      // Return a promise-compatible response indicating AI is needed
+      return {
+        message: `💰 Identifiquei sua transação: ${basicTransaction.type === 'expense' ? 'Gasto' : 'Receita'} de R$ ${basicTransaction.amount}
+        
+⚠️ Para processar completamente, configure a OpenAI API key.
+        
+🔧 Temporariamente processando: "${basicTransaction.description}" (${basicTransaction.date === this.getTodayDate() ? 'hoje' : 'ontem'})`,
+        success: true,
+      };
+    }
+    
     // For other messages, provide helpful guidance
     return {
       message: `⚠️ Para usar todas as funcionalidades avançadas, é necessário configurar a chave da OpenAI API.
@@ -141,6 +157,130 @@ Mas posso ajudar! ${username}, você pode me dizer:
 💡 Configure a OpenAI API para funcionalidades completas de IA!`,
       success: true,
     };
+  }
+
+  private parseBasicTransaction(text: string): { amount: number; description: string; type: 'income' | 'expense'; date: string } | null {
+    console.log('🔍 Parsing text:', text);
+    // Simple regex patterns for basic transaction parsing
+    const expensePatterns = [
+      /gastei\s+(\d+(?:[.,]\d{2})?)\s+reais?\s+(?:com\s+|no\s+|na\s+|para\s+)?(.+?)(?:\s+hoje|\s+ontem|$)/i,
+      /gastei\s+(\d+(?:[.,]\d{2})?)\s+(?:com\s+|no\s+|na\s+|para\s+)(.+?)(?:\s+hoje|\s+ontem|$)/i,
+      /paguei\s+(\d+(?:[.,]\d{2})?)\s+(?:reais?\s+)?(?:de\s+|para\s+|com\s+)?(.+?)(?:\s+hoje|\s+ontem|$)/i,
+      /comprei\s+(.+?)\s+(?:por\s+)?(\d+(?:[.,]\d{2})?)\s+(?:reais?)?\s*(?:hoje|ontem)?/i,
+    ];
+    
+    const incomePatterns = [
+      /recebi\s+(\d+(?:[.,]\d{2})?)\s+(?:reais?\s+)?(?:de\s+)?(.+?)(?:\s+hoje|\s+ontem|$)/i,
+      /ganhei\s+(\d+(?:[.,]\d{2})?)\s+(?:reais?\s+)?(?:de\s+|com\s+)?(.+?)(?:\s+hoje|\s+ontem|$)/i,
+    ];
+
+    // Check for expenses
+    for (const pattern of expensePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const amount = parseFloat(match[1].replace(',', '.'));
+        const description = pattern === expensePatterns[2] ? match[1] : match[2];
+        const hasOntem = text.includes('ontem');
+        const date = hasOntem ? this.getYesterdayDate() : this.getTodayDate();
+        
+        console.log('🔍 Basic transaction parsed - Expense:', { amount, description, date, hasOntem });
+        
+        return {
+          amount,
+          description: description.trim(),
+          type: 'expense',
+          date
+        };
+      }
+    }
+
+    // Check for income
+    for (const pattern of incomePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const amount = parseFloat(match[1].replace(',', '.'));
+        const description = match[2];
+        const hasOntem = text.includes('ontem');
+        const date = hasOntem ? this.getYesterdayDate() : this.getTodayDate();
+        
+        console.log('🔍 Basic transaction parsed - Income:', { amount, description, date, hasOntem });
+        
+        return {
+          amount,
+          description: description.trim(),
+          type: 'income',
+          date
+        };
+      }
+    }
+
+    return null;
+  }
+
+  private getTodayDate(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  private getYesterdayDate(): string {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+
+  private async processBasicTransaction(
+    data: { amount: number; description: string; type: 'income' | 'expense'; date: string },
+    userContext: UserContext
+  ): Promise<BotResponse> {
+    try {
+      // Default category based on keywords
+      const category = this.inferCategory(data.description, data.type);
+      
+      const transactionData: TransactionData = {
+        amount: data.amount,
+        type: data.type,
+        category,
+        description: data.description,
+        date: data.date
+      };
+
+      return await this.registerTransaction(transactionData, userContext);
+    } catch (error) {
+      console.error('Error processing basic transaction:', error);
+      return {
+        message: "😔 Erro ao processar transação básica. Tente novamente.",
+        success: false,
+      };
+    }
+  }
+
+  private inferCategory(description: string, type: 'income' | 'expense'): string {
+    const text = description.toLowerCase();
+    
+    if (type === 'income') {
+      if (text.includes('salário') || text.includes('salario')) return 'Salário';
+      if (text.includes('freelance') || text.includes('freela')) return 'Freelance';
+      return 'Outros';
+    }
+    
+    // Expense categories
+    if (text.includes('almoço') || text.includes('almoco') || text.includes('jantar') || 
+        text.includes('comida') || text.includes('lanche') || text.includes('café') || 
+        text.includes('cafe') || text.includes('restaurante')) return 'Alimentação';
+    
+    if (text.includes('uber') || text.includes('taxi') || text.includes('ônibus') || 
+        text.includes('onibus') || text.includes('gasolina') || text.includes('combustível') || 
+        text.includes('combustivel')) return 'Transporte';
+    
+    if (text.includes('farmácia') || text.includes('farmacia') || text.includes('médico') || 
+        text.includes('medico') || text.includes('hospital')) return 'Saúde';
+    
+    if (text.includes('cinema') || text.includes('festa') || text.includes('bar') || 
+        text.includes('diversão') || text.includes('diversao')) return 'Lazer';
+    
+    if (text.includes('roupa') || text.includes('sapato') || text.includes('tênis') || 
+        text.includes('tenis')) return 'Roupas';
+    
+    return 'Outros';
   }
 
   private getSystemPrompt(): string {
@@ -190,19 +330,29 @@ CATEGORIAS PADRÃO:
 - Freelance
 - Investimentos
 
-PROCESSAMENTO DE DATAS:
+PROCESSAMENTO DE DATAS - CRÍTICO:
 Use a data atual como referência para todos os cálculos.
 
-Quando o usuário mencionar uma data específica, extraia e converta para formato ISO:
+REGRAS ESPECÍFICAS PARA DATAS:
+- "hoje" = DATA ATUAL (${today.toISOString().split('T')[0]}) 
 - "ontem" = dia anterior à data atual
 - "anteontem" = dois dias antes da data atual
 - "segunda passada", "terça passada", etc = último dia da semana mencionado
 - "dia 14", "dia 25" = dia específico do mês atual (julho 2025)
 - "dia 14 do mês passado" = dia específico do mês anterior (junho 2025)
 - "segunda-feira", "terça-feira" = próximo ou último dia da semana
-- Se não mencionar data, use a data atual
+- Se não mencionar data, use a data atual (${today.toISOString().split('T')[0]})
 
-IMPORTANTE: Sempre passe a data no campo 'date' como string no formato 'YYYY-MM-DD'.
+MUITO IMPORTANTE: 
+- Quando usuário disser "hoje", use SEMPRE a data atual: ${today.toISOString().split('T')[0]}
+- Sempre passe a data no campo 'date' como string no formato 'YYYY-MM-DD'
+- NUNCA confunda "hoje" com "ontem"
+
+EXEMPLOS DE INTERPRETAÇÃO DE DATAS:
+- "gastei hoje" → date: "${today.toISOString().split('T')[0]}"
+- "gastei ontem" → date: "${new Date(today.getTime() - 24*60*60*1000).toISOString().split('T')[0]}"
+- "recebi hoje" → date: "${today.toISOString().split('T')[0]}"
+- "gasto de hoje" → date: "${today.toISOString().split('T')[0]}"
 
 PROCESSAMENTO DE TRANSAÇÕES:
 - Para UMA transação: use register_transaction
@@ -366,12 +516,17 @@ Para consultas sobre finanças, use a função query_finances.`;
         });
       }
 
-      // Parse and validate date
+      // Parse and validate date with detailed logging
       let transactionDate: Date;
+      console.log('📅 Date processing - Raw date received:', data.date);
+      
       if (data.date) {
         transactionDate = new Date(data.date);
+        console.log('📅 Date processing - Parsed date:', transactionDate.toISOString());
+        console.log('📅 Date processing - Local date string:', transactionDate.toLocaleDateString('pt-BR'));
       } else {
         transactionDate = new Date();
+        console.log('📅 Date processing - Using current date:', transactionDate.toLocaleDateString('pt-BR'));
       }
 
       // Create transaction
