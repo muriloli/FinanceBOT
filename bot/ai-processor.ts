@@ -235,7 +235,6 @@ Para consultas sobre finanças, use a função query_finances.`;
     userContext: UserContext
   ): Promise<BotResponse> {
     try {
-      console.log('🔍 DEBUG - Data recebida:', JSON.stringify(data, null, 2));
       
       // Find or create category
       let category = await storage.getCategoryByName(data.category, userContext.userId);
@@ -253,10 +252,8 @@ Para consultas sobre finanças, use a função query_finances.`;
       let transactionDate: Date;
       if (data.date) {
         transactionDate = new Date(data.date);
-        console.log('📅 DEBUG - Data interpretada:', data.date, '-> Objeto Date:', transactionDate);
       } else {
         transactionDate = new Date();
-        console.log('📅 DEBUG - Usando data atual:', transactionDate);
       }
 
       // Create transaction
@@ -408,8 +405,13 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     
-    const isToday = date.toDateString() === today.toDateString();
-    const isYesterday = date.toDateString() === yesterday.toDateString();
+    // Normalizar datas para comparação (remover horas)
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const normalizedYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    
+    const isToday = normalizedDate.getTime() === normalizedToday.getTime();
+    const isYesterday = normalizedDate.getTime() === normalizedYesterday.getTime();
     
     if (isToday) {
       return 'Hoje';
