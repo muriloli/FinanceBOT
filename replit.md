@@ -13,7 +13,7 @@ This is a backend-only WhatsApp AI bot that integrates with the existing Finance
 - ✅ User authentication via phone number verification
 - ✅ Graceful error handling and logging
 
-**Recent Changes (July 14, 2025)**:
+**Recent Changes (July 15, 2025)**:
 - Successfully migrated from Replit Agent to standard Replit environment
 - PostgreSQL database configured and schema deployed 
 - Fixed OpenAI initialization to handle missing API keys gracefully
@@ -21,6 +21,10 @@ This is a backend-only WhatsApp AI bot that integrates with the existing Finance
 - All dependencies properly installed and configured
 - Fixed critical SQL query bug in user phone number lookup (replaced sql template literals with like() function)
 - Bot now successfully finds users, processes transactions, and maintains conversation history
+- **Fixed date interpretation bug**: Bot now correctly interprets "hoje" as current date, "ontem" as previous day
+- Added robust error handling for conversation history tables - bot works with or without these tables
+- Created database migration script for missing conversation tables
+- Enhanced debugging capabilities for transaction processing
 - Migration completed - project fully functional and ready for production
 
 ## User Preferences

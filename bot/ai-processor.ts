@@ -172,7 +172,7 @@ Para consultas sobre finanças, use a função query_finances.`;
             date: {
               type: "string",
               format: "date",
-              description: "Data da transação no formato YYYY-MM-DD. Interprete expressões como 'ontem', 'terça passada', 'dia 14', etc. Se não especificado, use hoje.",
+              description: "Data da transação no formato YYYY-MM-DD. IMPORTANTE: Se o usuário disser 'hoje', use SEMPRE a data atual (2025-07-15). Para 'ontem', use 2025-07-14. Se não especificado, use a data atual.",
             },
           },
           required: ["amount", "type", "category", "description"],
@@ -235,6 +235,8 @@ Para consultas sobre finanças, use a função query_finances.`;
     userContext: UserContext
   ): Promise<BotResponse> {
     try {
+      console.log('🔍 DEBUG - Data recebida:', JSON.stringify(data, null, 2));
+      
       // Find or create category
       let category = await storage.getCategoryByName(data.category, userContext.userId);
       if (!category) {
@@ -247,6 +249,16 @@ Para consultas sobre finanças, use a função query_finances.`;
         });
       }
 
+      // Parse and validate date
+      let transactionDate: Date;
+      if (data.date) {
+        transactionDate = new Date(data.date);
+        console.log('📅 DEBUG - Data interpretada:', data.date, '-> Objeto Date:', transactionDate);
+      } else {
+        transactionDate = new Date();
+        console.log('📅 DEBUG - Usando data atual:', transactionDate);
+      }
+
       // Create transaction
       const transaction = await storage.createTransaction({
         userId: userContext.userId,
@@ -254,12 +266,11 @@ Para consultas sobre finanças, use a função query_finances.`;
         type: data.type,
         categoryId: category.id,
         description: data.description,
-        transactionDate: data.date ? new Date(data.date) : new Date(),
+        transactionDate: transactionDate,
         source: 'whatsapp',
       });
 
       const typeEmoji = data.type === 'income' ? '💰' : '💸';
-      const transactionDate = data.date ? new Date(data.date) : new Date();
       const dateStr = this.formatDateForMessage(transactionDate);
       
       const message = `✅ ${data.type === 'income' ? 'Receita' : 'Despesa'} registrada!
