@@ -87,19 +87,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date, category?: string): Promise<Transaction[]> {
-    console.log('📊 Storage debug - getTransactionsByUserAndType called');
-    console.log('- userId:', userId);
-    console.log('- type:', type);
-    
-    // First, let's test with a simple query to see if data exists
-    const allUserTransactions = await db.select().from(transactions).where(eq(transactions.userId, userId));
-    console.log('📊 Total user transactions:', allUserTransactions.length);
-    
-    // Show sample data if exists
-    if (allUserTransactions.length > 0) {
-      console.log('📊 Sample transaction:', allUserTransactions[0]);
-    }
-    
     let conditions = [
       eq(transactions.userId, userId),
       eq(transactions.type, type)
@@ -110,20 +97,14 @@ export class DatabaseStorage implements IStorage {
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
       
-      console.log('📊 Date filtering:', startDateStr, 'to', endDateStr);
-      
       // Use timestamp comparison for date filtering
       const startOfDay = new Date(startDateStr + 'T00:00:00.000Z');
       const endOfDay = new Date(endDateStr + 'T23:59:59.999Z');
-      
-      console.log('📊 Date range:', startOfDay.toISOString(), 'to', endOfDay.toISOString());
       
       conditions.push(
         gte(transactions.transactionDate, startOfDay),
         lte(transactions.transactionDate, endOfDay)
       );
-      
-      console.log('📊 Total conditions:', conditions.length);
     }
 
     if (category) {
@@ -134,7 +115,6 @@ export class DatabaseStorage implements IStorage {
     }
 
     const result = await db.select().from(transactions).where(and(...conditions)).orderBy(desc(transactions.transactionDate));
-    console.log('📊 Query result:', result.length, 'transactions found');
     return result;
   }
 

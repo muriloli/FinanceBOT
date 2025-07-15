@@ -42,6 +42,10 @@ This is a backend-only WhatsApp AI bot that integrates with the existing Finance
   - Better error handling and debug logging
 - **Improved AI prompt system**: Enhanced OpenAI prompts with clear examples for financial queries
 - **Storage layer improvements**: Added category filtering support in database queries
+- **Fixed critical query bug**: Resolved issue where financial queries returned 0 results due to type mismatch (expenses vs expense)
+- **Successfully implemented date range filtering**: Bot now correctly filters transactions by date periods
+- **Enhanced debugging system**: Added comprehensive logging for transaction queries and date filtering
+- **Query system fully operational**: All financial queries (today, yesterday, week, month, year) now work correctly
 
 ## User Preferences
 

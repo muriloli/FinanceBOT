@@ -758,16 +758,19 @@ ${balance.balance >= 0 ? '💚' : '❤️'} Saldo: R$ ${balance.balance.toFixed(
       }
 
       if (query.type === 'expenses' || query.type === 'income') {
+        // Convert plural to singular for database query
+        const dbType = query.type === 'expenses' ? 'expense' : 'income';
+        
         console.log('🔍 About to call getTransactionsByUserAndType with:');
         console.log('- userId:', userContext.userId);
-        console.log('- type:', query.type);
+        console.log('- type:', dbType);
         console.log('- startDate:', startDate);
         console.log('- endDate:', endDate);
         console.log('- category:', query.category);
         
         const transactions = await storage.getTransactionsByUserAndType(
           userContext.userId,
-          query.type as 'income' | 'expense',
+          dbType,
           startDate,
           endDate,
           query.category
