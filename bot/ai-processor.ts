@@ -764,19 +764,19 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     
-    // Normalizar datas para comparação (remover horas)
-    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const normalizedYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    // Usar strings das datas para comparação (formato YYYY-MM-DD)
+    const dateStr = date.toISOString().split('T')[0];
+    const todayStr = today.toISOString().split('T')[0]; 
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
     
     // Debug logs
     console.log('🗓️ formatDateForMessage - Input date:', date.toISOString());
-    console.log('🗓️ formatDateForMessage - Normalized date:', normalizedDate.toISOString());
-    console.log('🗓️ formatDateForMessage - Normalized today:', normalizedToday.toISOString());
-    console.log('🗓️ formatDateForMessage - Normalized yesterday:', normalizedYesterday.toISOString());
+    console.log('🗓️ formatDateForMessage - Date string:', dateStr);
+    console.log('🗓️ formatDateForMessage - Today string:', todayStr);
+    console.log('🗓️ formatDateForMessage - Yesterday string:', yesterdayStr);
     
-    const isToday = normalizedDate.getTime() === normalizedToday.getTime();
-    const isYesterday = normalizedDate.getTime() === normalizedYesterday.getTime();
+    const isToday = dateStr === todayStr;
+    const isYesterday = dateStr === yesterdayStr;
     
     console.log('🗓️ formatDateForMessage - isToday:', isToday);
     console.log('🗓️ formatDateForMessage - isYesterday:', isYesterday);
