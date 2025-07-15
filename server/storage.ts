@@ -1,7 +1,7 @@
 import { users, categories, transactions, conversationHistory, conversationSummary, type User, type InsertUser, type Category, type InsertCategory, type Transaction, type InsertTransaction, type ConversationHistory, type InsertConversationHistory, type ConversationSummary, type InsertConversationSummary } from "@shared/schema";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { eq, desc, and, gte, lte, sql, type SQL } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, type SQL, like, or } from "drizzle-orm";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -50,7 +50,7 @@ export class DatabaseStorage implements IStorage {
     
     if (result.length === 0) {
       // Try with LIKE pattern for partial matches
-      result = await db.select().from(users).where(sql`${users.phone} LIKE '%${phone}%'`).limit(1);
+      result = await db.select().from(users).where(like(users.phone, `%${phone}%`)).limit(1);
     }
     
     return result[0];
@@ -58,7 +58,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByPhoneContains(phone: string): Promise<User | undefined> {
     // Search for phone numbers that contain the given digits
-    const result = await db.select().from(users).where(sql`${users.phone} LIKE '%${phone}%'`).limit(1);
+    const result = await db.select().from(users).where(like(users.phone, `%${phone}%`)).limit(1);
     return result[0];
   }
 
