@@ -20,10 +20,8 @@ export class AIProcessor {
     try {
       // Check if OpenAI API key is configured
       if (!process.env.OPENAI_API_KEY) {
-        return {
-          message: "⚠️ Bot não configurado. OpenAI API key necessária para processar mensagens.",
-          success: false,
-        };
+        // Handle basic greetings and simple interactions without AI
+        return this.handleBasicMessage(message, userContext);
       }
 
       // Get conversation history and summary
@@ -86,6 +84,65 @@ IMPORTANTE: Sempre chame o usuário pelo nome (${userContext.username}) nas suas
     }
   }
 
+  private handleBasicMessage(message: string, userContext: UserContext): BotResponse {
+    const text = message.toLowerCase().trim();
+    const { username } = userContext;
+    
+    // Handle greetings
+    if (text.match(/^(oi|olá|ola|hey|hi|hello)$/)) {
+      return {
+        message: `Olá ${username}! 👋 Como posso ajudar com suas finanças hoje? 
+
+📝 Você pode me dizer coisas como:
+• "gastei 50 reais no almoço"
+• "recebi 100 de freelance"
+• "quanto gastei este mês"
+
+💰 Estou aqui para ajudar com suas finanças!`,
+        success: true,
+      };
+    }
+    
+    // Handle time-based greetings
+    if (text.match(/^(bom dia|boa tarde|boa noite)$/)) {
+      const hour = new Date().getHours();
+      let greeting = "Olá";
+      if (hour < 12) greeting = "Bom dia";
+      else if (hour < 18) greeting = "Boa tarde";
+      else greeting = "Boa noite";
+      
+      return {
+        message: `${greeting} ${username}! 🌟 
+
+Como posso ajudar com suas finanças hoje? Você pode registrar gastos, receitas ou consultar seus dados financeiros.`,
+        success: true,
+      };
+    }
+    
+    // Handle "how are you" type questions
+    if (text.match(/(como vai|como está|tudo bem|beleza)/)) {
+      return {
+        message: `Estou bem, obrigado ${username}! 😊 
+
+Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje?`,
+        success: true,
+      };
+    }
+    
+    // For other messages, provide helpful guidance
+    return {
+      message: `⚠️ Para usar todas as funcionalidades avançadas, é necessário configurar a chave da OpenAI API.
+
+Mas posso ajudar! ${username}, você pode me dizer:
+• "gastei [valor] com [descrição]"
+• "recebi [valor] de [fonte]"
+• "quanto gastei hoje/semana/mês"
+
+💡 Configure a OpenAI API para funcionalidades completas de IA!`,
+      success: true,
+    };
+  }
+
   private getSystemPrompt(): string {
     const today = new Date();
     const currentDate = today.toLocaleDateString('pt-BR', {
@@ -100,19 +157,26 @@ IMPORTANTE: Sempre chame o usuário pelo nome (${userContext.username}) nas suas
 DATA ATUAL: ${currentDate}
 
 REGRAS:
-1. Responda APENAS a tópicos relacionados a finanças
-2. Para perguntas não relacionadas a finanças, responda: "Posso ajudar apenas com questões financeiras"
-3. Sempre use function calling para registrar transações
-4. Seja amigável mas conciso
-5. Use português brasileiro
-6. Use emojis para deixar as respostas mais amigáveis
-7. SEMPRE chame o usuário pelo nome quando souber. Use o nome do contexto do usuário nas respostas.
+1. Seja amigável e responda a cumprimentos básicos como "oi", "olá", "bom dia"
+2. Para conversas casuais, seja educado mas direcione para finanças de forma natural
+3. Para perguntas totalmente não relacionadas a finanças, responda: "Posso ajudar principalmente com questões financeiras"
+4. Sempre use function calling para registrar transações
+5. Seja amigável mas conciso
+6. Use português brasileiro
+7. Use emojis para deixar as respostas mais amigáveis
+8. SEMPRE chame o usuário pelo nome quando souber. Use o nome do contexto do usuário nas respostas.
 
 CAPACIDADES:
 - Registrar despesas e receitas
 - Consultar resumos financeiros
 - Fornecer insights de gastos
 - Responder perguntas sobre finanças
+- Conversar de forma amigável sobre tópicos relacionados
+
+EXEMPLOS DE CUMPRIMENTOS:
+- "Oi", "Olá" → Responda com "Olá [nome]! 👋 Como posso ajudar com suas finanças hoje?"
+- "Bom dia", "Boa tarde" → Responda adequadamente e pergunte sobre finanças
+- "Como vai?" → Seja educado e direcione para ajuda financeira
 
 CATEGORIAS PADRÃO:
 - Alimentação
