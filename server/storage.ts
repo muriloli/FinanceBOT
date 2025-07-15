@@ -111,8 +111,9 @@ class MockStorage implements IStorage {
     ];
     this.mockCategories.push(...testCategories);
 
-    // Criar algumas transações de teste para hoje
-    const today = new Date();
+    // Criar algumas transações de teste para diferentes datas
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
@@ -149,6 +150,66 @@ class MockStorage implements IStorage {
         amount: "8.50",
         description: "Café da manhã",
         transactionDate: yesterday,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-4",
+        userId: testUser.id,
+        categoryId: "cat-1",
+        type: "expense",
+        amount: "300.00",
+        description: "Gasto com alimentação",
+        transactionDate: today,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-5",
+        userId: testUser.id,
+        categoryId: "cat-2",
+        type: "expense",
+        amount: "200.00",
+        description: "Gasto no mercado",
+        transactionDate: today,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-6",
+        userId: testUser.id,
+        categoryId: "cat-1",
+        type: "expense",
+        amount: "200.00",
+        description: "Gasto no mercado",
+        transactionDate: today,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-7",
+        userId: testUser.id,
+        categoryId: "cat-2",
+        type: "expense",
+        amount: "200.00",
+        description: "Gasto no mercado",
+        transactionDate: today,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "whatsapp-bot",
+      },
+      {
+        id: "trans-8",
+        userId: testUser.id,
+        categoryId: "cat-3",
+        type: "income",
+        amount: "3000.00",
+        description: "Salário mensal",
+        transactionDate: today,
         createdAt: new Date(),
         updatedAt: new Date(),
         source: "whatsapp-bot",
@@ -429,11 +490,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCategories(userId?: string): Promise<Category[]> {
+    if (!isDbConnected) return this.mockStorage.getCategories(userId);
     // Categories are shared across all users based on the actual database structure
     return db.select().from(categories);
   }
 
   async getCategoryByName(name: string, userId?: string): Promise<Category | undefined> {
+    if (!isDbConnected) return this.mockStorage.getCategoryByName(name, userId);
     const whereClause: SQL<unknown> = eq(categories.name, name);
     
     const result = await db.select().from(categories).where(whereClause).limit(1);
@@ -441,6 +504,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCategory(category: InsertCategory): Promise<Category> {
+    if (!isDbConnected) return this.mockStorage.createCategory(category);
     const result = await db.insert(categories).values(category).returning();
     return result[0];
   }

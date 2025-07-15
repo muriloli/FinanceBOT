@@ -129,24 +129,7 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
       };
     }
     
-    // Check for financial queries first
-    console.log('🔍 Checking for financial queries...');
-    const financialQuery = this.parseBasicFinancialQuery(text);
-    if (financialQuery) {
-      console.log('✅ Financial query found:', financialQuery);
-      try {
-        const result = await this.queryFinances(financialQuery, userContext);
-        return result;
-      } catch (error) {
-        console.error('Error in financial query:', error);
-        return {
-          message: "😔 Erro ao consultar suas finanças. Tente novamente.",
-          success: false,
-        };
-      }
-    }
-
-    // Try basic transaction parsing without AI
+    // Check for transaction registration first (higher priority)
     console.log('🔍 Attempting basic transaction parsing...');
     const basicTransaction = this.parseBasicTransaction(text);
     if (basicTransaction) {
@@ -171,6 +154,25 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
         success: true,
       };
     }
+    
+    // Check for financial queries second
+    console.log('🔍 Checking for financial queries...');
+    const financialQuery = this.parseBasicFinancialQuery(text);
+    if (financialQuery) {
+      console.log('✅ Financial query found:', financialQuery);
+      try {
+        const result = await this.queryFinances(financialQuery, userContext);
+        return result;
+      } catch (error) {
+        console.error('Error in financial query:', error);
+        return {
+          message: "😔 Erro ao consultar suas finanças. Tente novamente.",
+          success: false,
+        };
+      }
+    }
+
+
     
     // For other messages, provide helpful guidance
     return {
@@ -249,40 +251,50 @@ Mas posso ajudar! ${username}, você pode me dizer:
     
     // Patterns for financial queries
     const patterns = {
-      today: /(gastos?|despesas?)\s+(?:de\s+)?hoje|hoje.*?(gastos?|despesas?)|quanto\s+gastei\s+hoje|meus\s+gastos?\s+(?:de\s+)?hoje/i,
-      yesterday: /(gastos?|despesas?)\s+(?:de\s+)?ontem|ontem.*?(gastos?|despesas?)|quanto\s+gastei\s+ontem/i,
-      week: /(gastos?|despesas?)\s+(?:da|desta|esta)\s+semana|semana.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:esta|desta)\s+semana/i,
-      month: /(gastos?|despesas?)\s+(?:do|deste|este)\s+m[eê]s|m[eê]s.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:este|neste)\s+m[eê]s/i,
-      expenses: /(gastos?|despesas?)/i,
-      income: /(receitas?|ganhos?|rendas?)/i
+      today: {
+        expenses: /(gastos?|despesas?)\s+(?:de\s+)?hoje|hoje.*?(gastos?|despesas?)|quanto\s+gastei\s+hoje|meus\s+gastos?\s+(?:de\s+)?hoje/i,
+        income: /(receitas?|ganhos?|rendas?)\s+(?:de\s+)?hoje|hoje.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+hoje|minhas\s+receitas?\s+(?:de\s+)?hoje/i
+      },
+      yesterday: {
+        expenses: /(gastos?|despesas?)\s+(?:de\s+)?ontem|ontem.*?(gastos?|despesas?)|quanto\s+gastei\s+ontem/i,
+        income: /(receitas?|ganhos?|rendas?)\s+(?:de\s+)?ontem|ontem.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+ontem/i
+      },
+      week: {
+        expenses: /(gastos?|despesas?)\s+(?:da|desta|esta)\s+semana|semana.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:esta|desta)\s+semana/i,
+        income: /(receitas?|ganhos?|rendas?)\s+(?:da|desta|esta)\s+semana|semana.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+(?:esta|desta)\s+semana/i
+      },
+      month: {
+        expenses: /(gastos?|despesas?)\s+(?:do|deste|este)\s+m[eê]s|m[eê]s.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:este|neste)\s+m[eê]s/i,
+        income: /(receitas?|ganhos?|rendas?)\s+(?:do|deste|este)\s+m[eê]s|m[eê]s.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+(?:este|neste)\s+m[eê]s/i
+      },
+      expenses: /(gastos?|despesas?|gastei)/i,
+      income: /(receitas?|ganhos?|rendas?|recebi)/i
     };
 
     let period: 'today' | 'yesterday' | 'week' | 'month' = 'today';
     let type: 'expenses' | 'income' | 'summary' = 'expenses';
 
-    // Determine period
-    if (patterns.yesterday.test(text)) {
-      period = 'yesterday';
-    } else if (patterns.week.test(text)) {
-      period = 'week';
-    } else if (patterns.month.test(text)) {
-      period = 'month';
-    } else if (patterns.today.test(text)) {
+    // Determine period and type together
+    if (patterns.today.expenses.test(text) || patterns.today.income.test(text)) {
       period = 'today';
+      type = patterns.today.income.test(text) ? 'income' : 'expenses';
+    } else if (patterns.yesterday.expenses.test(text) || patterns.yesterday.income.test(text)) {
+      period = 'yesterday';
+      type = patterns.yesterday.income.test(text) ? 'income' : 'expenses';
+    } else if (patterns.week.expenses.test(text) || patterns.week.income.test(text)) {
+      period = 'week';
+      type = patterns.week.income.test(text) ? 'income' : 'expenses';
+    } else if (patterns.month.expenses.test(text) || patterns.month.income.test(text)) {
+      period = 'month';
+      type = patterns.month.income.test(text) ? 'income' : 'expenses';
     } else {
       // If no clear period found and it's asking about expenses/income, default to today
       if (patterns.expenses.test(text) || patterns.income.test(text)) {
         period = 'today';
+        type = patterns.income.test(text) ? 'income' : 'expenses';
       } else {
         return null;
       }
-    }
-
-    // Determine type
-    if (patterns.income.test(text)) {
-      type = 'income';
-    } else if (patterns.expenses.test(text)) {
-      type = 'expenses';
     }
 
     console.log('✅ Financial query parsed:', { period, type });
@@ -1084,48 +1096,40 @@ ${typeEmoji} R$ ${comparisonTotal.toFixed(2).replace('.', ',')}
   }
 
   private formatDateForMessage(date: Date): string {
-    // Verificar se a data é válida
-    if (!date || isNaN(date.getTime())) {
-      console.error('🚨 formatDateForMessage - Invalid date received:', date);
+    try {
+      // Verificar se a data é válida
+      if (!date || isNaN(date.getTime())) {
+        console.error('🚨 formatDateForMessage - Invalid date received:', date);
+        return 'Data inválida';
+      }
+      
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // Usar strings das datas para comparação (formato YYYY-MM-DD)
+      const dateStr = date.toISOString().split('T')[0];
+      const todayStr = today.toISOString().split('T')[0]; 
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      const isToday = dateStr === todayStr;
+      const isYesterday = dateStr === yesterdayStr;
+      
+      if (isToday) {
+        return 'Hoje';
+      } else if (isYesterday) {
+        return 'Ontem';
+      } else {
+        // Formatação brasileira: dd/mm/aaaa
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear();
+        
+        return `${day}/${month}/${year}`;
+      }
+    } catch (error) {
+      console.error('🚨 Error in formatDateForMessage:', error);
       return 'Data inválida';
-    }
-    
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    // Usar strings das datas para comparação (formato YYYY-MM-DD)
-    const dateStr = date.toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0]; 
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    
-    // Debug logs
-    console.log('🗓️ formatDateForMessage - Input date:', date.toISOString());
-    console.log('🗓️ formatDateForMessage - Date string:', dateStr);
-    console.log('🗓️ formatDateForMessage - Today string:', todayStr);
-    console.log('🗓️ formatDateForMessage - Yesterday string:', yesterdayStr);
-    
-    const isToday = dateStr === todayStr;
-    const isYesterday = dateStr === yesterdayStr;
-    
-    console.log('🗓️ formatDateForMessage - isToday:', isToday);
-    console.log('🗓️ formatDateForMessage - isYesterday:', isYesterday);
-    
-    if (isToday) {
-      return 'Hoje';
-    } else if (isYesterday) {
-      return 'Ontem';
-    } else {
-      // Formatação brasileira: dd/mm/aaaa
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear();
-      
-      // Adicionar dia da semana em português
-      const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-      const weekday = weekdays[date.getDay()];
-      
-      return `${weekday}, ${day}/${month}/${year}`;
     }
   }
 
