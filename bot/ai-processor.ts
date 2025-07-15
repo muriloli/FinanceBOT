@@ -84,6 +84,759 @@ IMPORTANTE: Sempre chame o usuário pelo nome (${userContext.username}) nas suas
     }
   }
 
+  private getSystemPrompt(): string {
+    const today = new Date();
+    const currentDate = today.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    return `Você é um assistente financeiro inteligente para o aplicativo FinanceFlow.
+
+DATA ATUAL: ${currentDate}
+
+🎯 MISSÃO: Dar total liberdade ao usuário para fazer QUALQUER pergunta sobre suas finanças e responder de forma inteligente e natural.
+
+REGRAS FUNDAMENTAIS:
+1. 🤖 Seja extremamente inteligente na interpretação de datas e períodos
+2. 💬 Permita perguntas livres e naturais sobre finanças  
+3. 🧠 Use smart_financial_query para TODAS as consultas financeiras
+4. 📅 Interprete datas de forma contextual e inteligente
+5. 👋 Seja amigável mas mantenha foco nas finanças
+6. 🔍 Faça perguntas esclarecedoras se algo não estiver claro
+7. 📊 Use dados reais do banco para responder
+8. 🆔 Sempre chame o usuário pelo nome quando disponível
+
+INTERPRETAÇÃO INTELIGENTE DE DATAS:
+- "hoje" = ${today.toISOString().split('T')[0]}
+- "ontem" = ${new Date(today.getTime() - 24*60*60*1000).toISOString().split('T')[0]}
+- "anteontem" = dois dias atrás
+- "segunda passada", "terça passada" = último dia da semana mencionado
+- "semana passada" = segunda a domingo da semana anterior
+- "esta semana" = segunda a domingo atual  
+- "mês passado" = mês anterior completo
+- "este mês" = do dia 1 até hoje
+
+EXEMPLOS DE INTERPRETAÇÃO LIVRE:
+- "quanto gastei hoje?" → smart_financial_query(period="today", type="expenses")
+- "gostaria de saber quanto gastei ontem" → smart_financial_query(period="yesterday", type="expenses")  
+- "quanto gastei semana passada?" → smart_financial_query(period="last_week", type="expenses")
+- "quanto já gastei essa semana?" → smart_financial_query(period="week", type="expenses")
+- "compare quanto gastei terça passada" → smart_financial_query(period="custom", specificDay="2025-07-09", comparison={period:"today"})
+- "quanto gastei semana passada com alimentação?" → smart_financial_query(period="last_week", type="expenses", category="Alimentação")
+- "compare semana passada com essa semana" → smart_financial_query(period="last_week", type="expenses", comparison={period:"week"})
+- "resumo do mês até agora" → smart_financial_query(period="month", type="summary")
+- "como estão minhas finanças?" → smart_financial_query(period="month", type="summary")
+
+IMPORTANTES DIRETRIZES:
+- Use SEMPRE smart_financial_query para consultas financeiras
+- Seja criativo e flexível na interpretação
+- Mantenha conversas naturais e amigáveis
+- Para não-finanças: "Posso ajudar principalmente com questões financeiras"
+
+CAPACIDADES:
+- Registrar despesas e receitas
+- Consultar resumos financeiros flexíveis
+- Fornecer insights de gastos
+- Comparações entre períodos
+- Responder perguntas sobre finanças
+- Conversar de forma amigável sobre tópicos relacionados
+
+CATEGORIAS PADRÃO:
+- Alimentação, Transporte, Saúde, Educação, Lazer, Moradia, Roupas, Salário, Freelance, Investimentos, Outros`;
+  }
+
+  private getFunctionDefinitions() {
+    return [
+      {
+        name: "register_transaction",
+        description: "Registrar uma transação financeira (receita ou despesa)",
+        parameters: {
+          type: "object",
+          properties: {
+            amount: {
+              type: "number",
+              description: "Valor da transação",
+            },
+            type: {
+              type: "string",
+              enum: ["income", "expense"],
+              description: "Tipo da transação",
+            },
+            category: {
+              type: "string",
+              description: "Categoria da transação",
+            },
+            description: {
+              type: "string",
+              description: "Descrição da transação",
+            },
+            date: {
+              type: "string",
+              format: "date",
+              description: "Data da transação no formato YYYY-MM-DD. IMPORTANTE: Se o usuário disser 'hoje', use SEMPRE a data atual. Para 'ontem', use dia anterior. Se não especificado, use a data atual.",
+            },
+          },
+          required: ["amount", "type", "category", "description"],
+        },
+      },
+      {
+        name: "register_multiple_transactions",
+        description: "Registrar múltiplas transações de uma vez quando o usuário mencionar várias despesas ou receitas na mesma mensagem",
+        parameters: {
+          type: "object",
+          properties: {
+            transactions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  amount: {
+                    type: "number",
+                    description: "Valor da transação",
+                  },
+                  type: {
+                    type: "string",
+                    enum: ["income", "expense"],
+                    description: "Tipo da transação",
+                  },
+                  category: {
+                    type: "string",
+                    description: "Categoria da transação",
+                  },
+                  description: {
+                    type: "string",
+                    description: "Descrição da transação",
+                  },
+                  date: {
+                    type: "string",
+                    format: "date",
+                    description: "Data da transação no formato YYYY-MM-DD",
+                  },
+                },
+                required: ["amount", "type", "category", "description"],
+              },
+              description: "Lista de transações para registrar",
+            },
+          },
+          required: ["transactions"],
+        },
+      },
+      {
+        name: "smart_financial_query",
+        description: `Consulta inteligente e flexível de dados financeiros. Interpreta perguntas naturais do usuário sobre finanças e busca informações específicas no banco de dados.
+        
+        EXEMPLOS PRÁTICOS:
+        - "quanto gastei hoje?" → period="today", type="expenses"
+        - "quanto gastei ontem?" → period="yesterday", type="expenses"  
+        - "quanto gastei semana passada?" → period="last_week", type="expenses"
+        - "quanto ja gastei essa semana?" → period="week", type="expenses"
+        - "compare quanto gastei terça passada com hoje" → period="custom", specificDay="2025-07-09", comparison={period:"today"}
+        - "quanto gastei semana passada com alimentação?" → period="last_week", type="expenses", category="Alimentação"
+        - "quanto gastei semana passada vs essa semana?" → period="last_week", type="expenses", comparison={period:"week"}
+        - "resumo do mes até agora" → period="month", type="summary"
+        - "como estão minhas finanças?" → period="month", type="summary"
+        - "meu saldo atual" → period="month", type="balance"
+        - "quanto recebi este mês?" → period="month", type="income"`,
+        parameters: {
+          type: "object",
+          properties: {
+            period: {
+              type: "string",
+              enum: ["today", "yesterday", "week", "last_week", "month", "last_month", "year", "last_year", "custom"],
+              description: "Período da consulta. Use 'custom' para datas específicas como 'terça passada', 'dia 10', etc."
+            },
+            type: {
+              type: "string", 
+              enum: ["summary", "expenses", "income", "balance", "detailed"],
+              description: "Tipo de informação: summary=resumo geral, expenses=gastos, income=receitas, balance=saldo, detailed=detalhado"
+            },
+            category: {
+              type: "string",
+              description: "Categoria específica para filtrar (Alimentação, Transporte, Saúde, Lazer, etc.)"
+            },
+            startDate: {
+              type: "string",
+              format: "date", 
+              description: "Data inicial para período custom (YYYY-MM-DD)"
+            },
+            endDate: {
+              type: "string",
+              format: "date",
+              description: "Data final para período custom (YYYY-MM-DD)"
+            },
+            comparison: {
+              type: "object",
+              properties: {
+                period: {
+                  type: "string",
+                  enum: ["today", "yesterday", "week", "last_week", "month", "last_month", "year", "last_year", "custom"],
+                  description: "Período para comparar"
+                },
+                startDate: {
+                  type: "string", 
+                  format: "date",
+                  description: "Data inicial da comparação"
+                },
+                endDate: {
+                  type: "string",
+                  format: "date", 
+                  description: "Data final da comparação"
+                }
+              },
+              description: "Para comparações entre períodos (ex: 'compare esta semana com semana passada')"
+            },
+            specificDay: {
+              type: "string",
+              format: "date",
+              description: "Data específica quando usuário menciona um dia exato (ex: 'terça passada' = '2025-07-09')"
+            }
+          },
+          required: ["period", "type"]
+        }
+      }
+    ];
+  }
+
+  private async handleFunctionCall(
+    functionName: string,
+    argumentsJson: string,
+    userContext: UserContext
+  ): Promise<BotResponse> {
+    try {
+      const args = JSON.parse(argumentsJson);
+      console.log(`🔧 Function call: ${functionName}`, args);
+
+      if (functionName === "register_transaction") {
+        return await this.registerTransaction(args, userContext);
+      }
+
+      if (functionName === "register_multiple_transactions") {
+        return await this.registerMultipleTransactions(args, userContext);
+      }
+
+      if (functionName === "smart_financial_query") {
+        return await this.executeSmartQuery(args, userContext);
+      }
+
+      return {
+        message: "Função não reconhecida.",
+        success: false,
+      };
+    } catch (error) {
+      console.error('Error handling function call:', error);
+      return {
+        message: "😔 Ocorreu um erro ao processar sua solicitação. Tente novamente.",
+        success: false,
+      };
+    }
+  }
+
+  private async executeSmartQuery(args: any, userContext: UserContext): Promise<BotResponse> {
+    try {
+      console.log('🧠 Smart Financial Query - Args:', JSON.stringify(args, null, 2));
+      
+      const { period, type, category, comparison, specificDay, startDate: customStart, endDate: customEnd } = args;
+      
+      // Calcular período principal
+      const dateRange = this.calculateDateRanges(period, specificDay, customStart, customEnd);
+      console.log('📅 Main period range:', dateRange);
+      
+      // Buscar dados do período principal
+      const mainData = await this.fetchFinancialData(
+        userContext.userId, 
+        type, 
+        dateRange.startDate, 
+        dateRange.endDate, 
+        category
+      );
+      
+      let response = this.formatFinancialResponse(mainData, period, type, category, userContext.username);
+      
+      // Se há comparação, buscar dados do período de comparação
+      if (comparison) {
+        console.log('🔄 Comparison requested:', comparison);
+        
+        const comparisonRange = this.calculateDateRanges(
+          comparison.period, 
+          comparison.specificDay, 
+          comparison.startDate, 
+          comparison.endDate
+        );
+        
+        const comparisonData = await this.fetchFinancialData(
+          userContext.userId,
+          type,
+          comparisonRange.startDate,
+          comparisonRange.endDate, 
+          category
+        );
+        
+        response += this.formatComparisonResponse(mainData, comparisonData, period, comparison.period);
+      }
+      
+      return {
+        message: response,
+        success: true,
+        data: { mainData, comparison: comparison ? true : false }
+      };
+      
+    } catch (error) {
+      console.error('❌ Error in smart financial query:', error);
+      return {
+        message: "😔 Erro ao consultar suas finanças. Tente novamente.",
+        success: false
+      };
+    }
+  }
+
+  private calculateDateRanges(period: string, specificDay?: string, customStart?: string, customEnd?: string) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Helper para início da semana (segunda-feira)
+    const getWeekStart = (date: Date) => {
+      const dayOfWeek = date.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Se domingo (0), volta 6 dias
+      return new Date(date.getTime() + diff * 24 * 60 * 60 * 1000);
+    };
+    
+    // Helper para fim da semana (domingo)  
+    const getWeekEnd = (date: Date) => {
+      const weekStart = getWeekStart(date);
+      return new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+    };
+
+    switch (period) {
+      case "today":
+        return {
+          startDate: new Date(today),
+          endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
+        };
+        
+      case "yesterday": 
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        return {
+          startDate: yesterday,
+          endDate: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1)
+        };
+        
+      case "week":
+        return {
+          startDate: getWeekStart(today),
+          endDate: getWeekEnd(today)
+        };
+        
+      case "last_week":
+        const lastWeekStart = new Date(getWeekStart(today).getTime() - 7 * 24 * 60 * 60 * 1000);
+        return {
+          startDate: lastWeekStart,
+          endDate: new Date(lastWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
+        };
+        
+      case "month":
+        return {
+          startDate: new Date(today.getFullYear(), today.getMonth(), 1),
+          endDate: today
+        };
+        
+      case "last_month":
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+        return {
+          startDate: lastMonth,
+          endDate: lastMonthEnd
+        };
+        
+      case "year":
+        return {
+          startDate: new Date(today.getFullYear(), 0, 1),
+          endDate: today
+        };
+        
+      case "custom":
+        if (specificDay) {
+          const specific = new Date(specificDay);
+          return {
+            startDate: specific,
+            endDate: new Date(specific.getTime() + 24 * 60 * 60 * 1000 - 1)
+          };
+        }
+        if (customStart && customEnd) {
+          return {
+            startDate: new Date(customStart),
+            endDate: new Date(customEnd)
+          };
+        }
+        break;
+    }
+    
+    // Fallback para hoje
+    return {
+      startDate: today,
+      endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
+    };
+  }
+
+  private async fetchFinancialData(userId: string, type: string, startDate: Date, endDate: Date, category?: string) {
+    try {
+      console.log(`🔍 Fetching ${type} data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      
+      switch (type) {
+        case "expenses":
+          const expenses = await storage.getTransactionsByUserAndType(userId, 'expense', startDate, endDate, category);
+          const totalExpenses = expenses.reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
+          return { transactions: expenses, total: totalExpenses, type: 'expense' };
+          
+        case "income":
+          const income = await storage.getTransactionsByUserAndType(userId, 'income', startDate, endDate, category);
+          const totalIncome = income.reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
+          return { transactions: income, total: totalIncome, type: 'income' };
+          
+        case "balance":
+          const balance = await storage.getUserBalance(userId, startDate, endDate);
+          return { balance, type: 'balance' };
+          
+        case "summary":
+          const allTransactions = await storage.getTransactionsByUser(userId, startDate, endDate);
+          const summary = await storage.getUserBalance(userId, startDate, endDate);
+          
+          // Agrupar por categorias
+          const byCategory = allTransactions.reduce((acc: any, t: any) => {
+            const cat = t.categoryId || 'Outros';
+            if (!acc[cat]) acc[cat] = { income: 0, expense: 0 };
+            acc[cat][t.type] += parseFloat(t.amount);
+            return acc;
+          }, {});
+          
+          return { summary, byCategory, transactions: allTransactions, type: 'summary' };
+          
+        case "detailed":
+          const detailed = await storage.getTransactionsByUser(userId, startDate, endDate);
+          const grouped = detailed.reduce((acc: any, t: any) => {
+            const cat = t.description || 'Outros';
+            if (!acc[cat]) acc[cat] = [];
+            acc[cat].push(t);
+            return acc;
+          }, {});
+          return { grouped, transactions: detailed, type: 'detailed' };
+          
+        default:
+          throw new Error(`Tipo de consulta não suportado: ${type}`);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching financial data:', error);
+      throw error;
+    }
+  }
+
+  private formatFinancialResponse(data: any, period: string, type: string, category?: string, username?: string): string {
+    const periodLabels: any = {
+      today: "hoje",
+      yesterday: "ontem", 
+      week: "esta semana",
+      last_week: "semana passada",
+      month: "este mês",
+      last_month: "mês passado",
+      year: "este ano"
+    };
+    
+    const periodText = periodLabels[period] || period;
+    const categoryText = category ? ` em ${category}` : "";
+    const greeting = username ? `${username}, ` : "";
+    
+    switch (type) {
+      case "expenses":
+        if (data.total === 0) {
+          return `${greeting}você não teve gastos${categoryText} ${periodText}! 🎉`;
+        }
+        return `💸 ${greeting}seus gastos${categoryText} ${periodText}:\n\n💰 Total: R$ ${data.total.toFixed(2)}\n📊 ${data.transactions.length} transação(ões)`;
+        
+      case "income":
+        if (data.total === 0) {
+          return `${greeting}você não teve receitas${categoryText} ${periodText}.`;
+        }
+        return `💰 ${greeting}suas receitas${categoryText} ${periodText}:\n\n💵 Total: R$ ${data.total.toFixed(2)}\n📊 ${data.transactions.length} transação(ões)`;
+        
+      case "balance":
+        const balance = data.balance.balance;
+        const emoji = balance >= 0 ? "💚" : "🔴";
+        return `${emoji} ${greeting}seu saldo ${periodText}:\n\n💰 Receitas: R$ ${data.balance.income.toFixed(2)}\n💸 Gastos: R$ ${data.balance.expense.toFixed(2)}\n${emoji} Saldo: R$ ${balance.toFixed(2)}`;
+        
+      case "summary":
+        const { summary, byCategory } = data;
+        let response = `📊 ${greeting}resumo financeiro ${periodText}:\n\n`;
+        response += `💰 Receitas: R$ ${summary.income.toFixed(2)}\n`;
+        response += `💸 Gastos: R$ ${summary.expense.toFixed(2)}\n`;
+        response += `💚 Saldo: R$ ${summary.balance.toFixed(2)}\n\n`;
+        
+        if (Object.keys(byCategory).length > 0) {
+          response += `📈 Por categoria:\n`;
+          Object.entries(byCategory).forEach(([cat, values]: [string, any]) => {
+            if (values.expense > 0) {
+              response += `• ${cat}: R$ ${values.expense.toFixed(2)}\n`;
+            }
+          });
+        }
+        return response;
+        
+      default:
+        return `${greeting}consulta realizada com sucesso! ✅`;
+    }
+  }
+
+  private formatComparisonResponse(mainData: any, comparisonData: any, mainPeriod: string, comparisonPeriod: string): string {
+    const periodLabels: any = {
+      today: "hoje",
+      yesterday: "ontem",
+      week: "esta semana", 
+      last_week: "semana passada",
+      month: "este mês",
+      last_month: "mês passado"
+    };
+    
+    const mainTotal = mainData.total || mainData.balance?.expense || 0;
+    const comparisonTotal = comparisonData.total || comparisonData.balance?.expense || 0;
+    
+    const difference = mainTotal - comparisonTotal;
+    const percentChange = comparisonTotal > 0 ? ((difference / comparisonTotal) * 100) : 0;
+    
+    let response = `\n\n🔄 Comparação:\n`;
+    response += `📊 ${periodLabels[mainPeriod]}: R$ ${mainTotal.toFixed(2)}\n`;
+    response += `📊 ${periodLabels[comparisonPeriod]}: R$ ${comparisonTotal.toFixed(2)}\n`;
+    
+    if (difference > 0) {
+      response += `📈 Diferença: +R$ ${difference.toFixed(2)} (${percentChange.toFixed(1)}% maior)`;
+    } else if (difference < 0) {
+      response += `📉 Diferença: R$ ${difference.toFixed(2)} (${Math.abs(percentChange).toFixed(1)}% menor)`;
+    } else {
+      response += `⚖️ Valores iguais!`;
+    }
+    
+    return response;
+  }
+
+  // MÉTODOS EXISTENTES (mantidos da versão original)
+  private async registerTransaction(transactionData: TransactionData, userContext: UserContext): Promise<BotResponse> {
+    try {
+      console.log('💰 Registering transaction:', transactionData);
+
+      // Validate required fields
+      if (!transactionData.amount || !transactionData.type || !transactionData.description) {
+        return {
+          message: "😔 Dados incompletos. Preciso do valor, tipo e descrição da transação.",
+          success: false,
+        };
+      }
+
+      // Set default date if not provided
+      if (!transactionData.date) {
+        transactionData.date = this.getTodayDate();
+      }
+
+      // Find or create category
+      let category = await storage.getCategoryByName(transactionData.category);
+      if (!category) {
+        category = await storage.createCategory({
+          name: transactionData.category,
+          type: transactionData.type,
+          color: this.getDefaultColor(transactionData.type),
+          icon: this.getDefaultIcon(transactionData.category),
+          isDefault: false,
+        });
+      }
+
+      // Create transaction
+      const transaction = await storage.createTransaction({
+        userId: userContext.userId,
+        categoryId: category.id,
+        type: transactionData.type,
+        amount: Number(transactionData.amount).toFixed(2),
+        description: transactionData.description,
+        transactionDate: new Date(transactionData.date + 'T12:00:00.000Z'),
+        source: 'bot',
+      });
+
+      const typeText = transactionData.type === 'expense' ? 'Despesa' : 'Receita';
+      const emoji = transactionData.type === 'expense' ? '💸' : '💰';
+      const formattedDate = this.formatDateForMessage(new Date(transactionData.date + 'T12:00:00.000Z'));
+
+      return {
+        message: `✅ ${typeText} registrada com sucesso!\n\n${emoji} R$ ${transactionData.amount.toFixed(2)}\n📝 ${transactionData.description}\n📂 ${transactionData.category}\n📅 ${formattedDate}`,
+        success: true,
+        data: transaction,
+      };
+    } catch (error) {
+      console.error('Error registering transaction:', error);
+      return {
+        message: "😔 Erro ao registrar transação. Tente novamente.",
+        success: false,
+      };
+    }
+  }
+
+  private async registerMultipleTransactions(data: { transactions: TransactionData[] }, userContext: UserContext): Promise<BotResponse> {
+    try {
+      console.log('💰 Registering multiple transactions:', data.transactions);
+
+      const results = [];
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      for (const transactionData of data.transactions) {
+        // Set default date if not provided
+        if (!transactionData.date) {
+          transactionData.date = this.getTodayDate();
+        }
+
+        // Find or create category
+        let category = await storage.getCategoryByName(transactionData.category);
+        if (!category) {
+          category = await storage.createCategory({
+            name: transactionData.category,
+            type: transactionData.type,
+            color: this.getDefaultColor(transactionData.type),
+            icon: this.getDefaultIcon(transactionData.category),
+            isDefault: false,
+          });
+        }
+
+        // Create transaction
+        const transaction = await storage.createTransaction({
+          userId: userContext.userId,
+          categoryId: category.id,
+          type: transactionData.type,
+          amount: Number(transactionData.amount).toFixed(2),
+          description: transactionData.description,
+          transactionDate: new Date(transactionData.date),
+          source: 'bot',
+        });
+
+        results.push(transaction);
+
+        if (transactionData.type === 'income') {
+          totalIncome += transactionData.amount;
+        } else {
+          totalExpense += transactionData.amount;
+        }
+      }
+
+      let response = `✅ ${data.transactions.length} transações registradas com sucesso!\n\n`;
+      
+      if (totalIncome > 0) {
+        response += `💰 Total de receitas: R$ ${totalIncome.toFixed(2)}\n`;
+      }
+      if (totalExpense > 0) {
+        response += `💸 Total de despesas: R$ ${totalExpense.toFixed(2)}\n`;
+      }
+
+      response += `\n📋 Detalhes:\n`;
+      data.transactions.forEach((t, index) => {
+        const emoji = t.type === 'expense' ? '💸' : '💰';
+        response += `${emoji} R$ ${t.amount.toFixed(2)} - ${t.description}\n`;
+      });
+
+      return {
+        message: response,
+        success: true,
+        data: results,
+      };
+    } catch (error) {
+      console.error('Error registering multiple transactions:', error);
+      return {
+        message: "😔 Erro ao registrar transações. Tente novamente.",
+        success: false,
+      };
+    }
+  }
+
+  private async buildConversationContext(userId: string): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+    try {
+      // Tentar usar funções de conversação se existirem
+      if (storage.getConversationSummary && storage.getRecentConversations) {
+        const summary = await storage.getConversationSummary(userId);
+        const recentConversations = await storage.getRecentConversations(userId, 5);
+
+        const context = [];
+
+        // Add summary if available
+        if (summary && summary.summary) {
+          context.push({
+            role: 'assistant' as const,
+            content: `Contexto da conversa anterior: ${summary.summary}`,
+          });
+        }
+
+        // Add recent conversations
+        recentConversations.forEach(conv => {
+          context.push({ role: 'user' as const, content: conv.userMessage });
+          context.push({ role: 'assistant' as const, content: conv.botResponse });
+        });
+
+        return context;
+      }
+    } catch (error) {
+      console.error('Error building conversation context (tables may not exist):', error);
+    }
+    
+    return [];
+  }
+
+  private async saveConversationToHistory(userMessage: string, botResponse: string, userContext: UserContext): Promise<void> {
+    try {
+      // Tentar salvar conversa se a função existir
+      if (storage.saveConversation) {
+        await storage.saveConversation({
+          userId: userContext.userId,
+          phone: userContext.phone,
+          userMessage,
+          botResponse,
+          messageType: 'chat',
+        });
+
+        // Update conversation summary periodically
+        if (storage.getRecentConversations && storage.updateConversationSummary) {
+          const recentCount = await storage.getRecentConversations(userContext.userId, 1);
+          if (recentCount.length % 10 === 0) {
+            // Every 10 messages, update summary
+            const allRecent = await storage.getRecentConversations(userContext.userId, 20);
+            const summary = this.generateConversationSummary(allRecent);
+            
+            await storage.updateConversationSummary(userContext.userId, userContext.phone, allRecent.length);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error saving conversation (tables may not exist):', error);
+      // Continue without saving - not critical for bot functionality
+    }
+  }
+
+  private generateConversationSummary(conversations: any[]): string {
+    if (conversations.length === 0) return '';
+    
+    // Simple summary generation - in production, you might use AI for this
+    const transactionKeywords = ['gastei', 'recebi', 'paguei', 'comprei', 'ganhei'];
+    const queryKeywords = ['quanto', 'saldo', 'resumo', 'finanças'];
+    
+    let transactions = 0;
+    let queries = 0;
+    
+    conversations.forEach(conv => {
+      const message = conv.userMessage.toLowerCase();
+      if (transactionKeywords.some(word => message.includes(word))) {
+        transactions++;
+      }
+      if (queryKeywords.some(word => message.includes(word))) {
+        queries++;
+      }
+    });
+    
+    return `Usuário registrou ${transactions} transações e fez ${queries} consultas financeiras nas últimas conversas.`;
+  }
+
   private async handleBasicMessage(message: string, userContext: UserContext): Promise<BotResponse> {
     const text = message.toLowerCase().trim();
     const { username } = userContext;
@@ -133,26 +886,17 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
     console.log('🔍 Attempting basic transaction parsing...');
     const basicTransaction = this.parseBasicTransaction(text);
     if (basicTransaction) {
-      console.log('✅ Basic transaction found, processing async...');
-      // Process the transaction directly for testing
-      setTimeout(async () => {
-        try {
-          const result = await this.processBasicTransaction(basicTransaction, userContext);
-          console.log('✅ Basic transaction processed:', result);
-        } catch (error) {
-          console.error('❌ Error processing basic transaction:', error);
-        }
-      }, 100);
-      
-      // Return immediate response for now
-      return {
-        message: `💰 Identifiquei sua transação: ${basicTransaction.type === 'expense' ? 'Gasto' : 'Receita'} de R$ ${basicTransaction.amount}
-
-🔧 Processando: "${basicTransaction.description}" (${basicTransaction.date === this.getTodayDate() ? 'hoje' : 'ontem'})
-        
-⚠️ Para funcionalidade completa, configure a OpenAI API key.`,
-        success: true,
-      };
+      console.log('✅ Basic transaction found, processing...');
+      try {
+        const result = await this.processBasicTransaction(basicTransaction, userContext);
+        return result;
+      } catch (error) {
+        console.error('❌ Error processing basic transaction:', error);
+        return {
+          message: "😔 Erro ao processar transação. Tente novamente.",
+          success: false,
+        };
+      }
     }
     
     // Check for financial queries second
@@ -161,7 +905,7 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
     if (financialQuery) {
       console.log('✅ Financial query found:', financialQuery);
       try {
-        const result = await this.queryFinances(financialQuery, userContext);
+        const result = await this.executeSmartQuery(financialQuery, userContext);
         return result;
       } catch (error) {
         console.error('Error in financial query:', error);
@@ -171,8 +915,6 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
         };
       }
     }
-
-
     
     // For other messages, provide helpful guidance
     return {
@@ -208,11 +950,9 @@ Mas posso ajudar! ${username}, você pode me dizer:
       const match = text.match(pattern);
       if (match) {
         const amount = parseFloat(match[1].replace(',', '.'));
-        const description = pattern === expensePatterns[2] ? match[1] : match[2];
+        const description = pattern === expensePatterns[3] ? match[1] : match[2];
         const hasOntem = text.includes('ontem');
         const date = hasOntem ? this.getYesterdayDate() : this.getTodayDate();
-        
-        console.log('🔍 Basic transaction parsed - Expense:', { amount, description, date, hasOntem });
         
         return {
           amount,
@@ -232,8 +972,6 @@ Mas posso ajudar! ${username}, você pode me dizer:
         const hasOntem = text.includes('ontem');
         const date = hasOntem ? this.getYesterdayDate() : this.getTodayDate();
         
-        console.log('🔍 Basic transaction parsed - Income:', { amount, description, date, hasOntem });
-        
         return {
           amount,
           description: description.trim(),
@@ -246,99 +984,42 @@ Mas posso ajudar! ${username}, você pode me dizer:
     return null;
   }
 
-  private parseBasicFinancialQuery(text: string): FinancialQuery | null {
-    console.log('🔍 Parsing financial query:', text);
+  private parseBasicFinancialQuery(text: string): any | null {
+    const today = new Date();
     
     // Patterns for financial queries
-    const patterns = {
-      today: {
-        expenses: /(gastos?|despesas?)\s+(?:de\s+)?hoje|hoje.*?(gastos?|despesas?)|quanto\s+gastei\s+hoje|meus\s+gastos?\s+(?:de\s+)?hoje/i,
-        income: /(receitas?|ganhos?|rendas?)\s+(?:de\s+)?hoje|hoje.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+hoje|minhas\s+receitas?\s+(?:de\s+)?hoje/i
-      },
-      yesterday: {
-        expenses: /(gastos?|despesas?)\s+(?:de\s+)?ontem|ontem.*?(gastos?|despesas?)|quanto\s+gastei\s+ontem/i,
-        income: /(receitas?|ganhos?|rendas?)\s+(?:de\s+)?ontem|ontem.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+ontem/i
-      },
-      week: {
-        expenses: /(gastos?|despesas?)\s+(?:da|desta|esta)\s+semana|semana.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:esta|desta)\s+semana/i,
-        income: /(receitas?|ganhos?|rendas?)\s+(?:da|desta|esta)\s+semana|semana.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+(?:esta|desta)\s+semana/i
-      },
-      month: {
-        expenses: /(gastos?|despesas?)\s+(?:do|deste|este)\s+m[eê]s|m[eê]s.*?(gastos?|despesas?)|quanto\s+gastei\s+(?:este|neste)\s+m[eê]s/i,
-        income: /(receitas?|ganhos?|rendas?)\s+(?:do|deste|este)\s+m[eê]s|m[eê]s.*?(receitas?|ganhos?|rendas?)|quanto\s+recebi\s+(?:este|neste)\s+m[eê]s/i
-      },
-      expenses: /(gastos?|despesas?|gastei)/i,
-      income: /(receitas?|ganhos?|rendas?|recebi)/i
-    };
+    const patterns = [
+      { regex: /quanto\s+gastei\s+hoje/i, args: { period: 'today', type: 'expenses' } },
+      { regex: /quanto\s+gastei\s+ontem/i, args: { period: 'yesterday', type: 'expenses' } },
+      { regex: /quanto\s+gastei\s+(?:esta\s+)?semana/i, args: { period: 'week', type: 'expenses' } },
+      { regex: /quanto\s+gastei\s+semana\s+passada/i, args: { period: 'last_week', type: 'expenses' } },
+      { regex: /quanto\s+gastei\s+(?:este\s+)?m[eê]s/i, args: { period: 'month', type: 'expenses' } },
+      { regex: /quanto\s+recebi\s+hoje/i, args: { period: 'today', type: 'income' } },
+      { regex: /quanto\s+recebi\s+(?:este\s+)?m[eê]s/i, args: { period: 'month', type: 'income' } },
+      { regex: /(?:meu\s+)?saldo/i, args: { period: 'month', type: 'balance' } },
+      { regex: /(?:como\s+est[aã]o\s+)?(?:minhas\s+)?finan[cç]as/i, args: { period: 'month', type: 'summary' } },
+      { regex: /resumo/i, args: { period: 'month', type: 'summary' } }
+    ];
 
-    let period: 'today' | 'yesterday' | 'week' | 'month' = 'today';
-    let type: 'expenses' | 'income' | 'summary' = 'expenses';
-
-    // Determine period and type together
-    if (patterns.today.expenses.test(text) || patterns.today.income.test(text)) {
-      period = 'today';
-      type = patterns.today.income.test(text) ? 'income' : 'expenses';
-    } else if (patterns.yesterday.expenses.test(text) || patterns.yesterday.income.test(text)) {
-      period = 'yesterday';
-      type = patterns.yesterday.income.test(text) ? 'income' : 'expenses';
-    } else if (patterns.week.expenses.test(text) || patterns.week.income.test(text)) {
-      period = 'week';
-      type = patterns.week.income.test(text) ? 'income' : 'expenses';
-    } else if (patterns.month.expenses.test(text) || patterns.month.income.test(text)) {
-      period = 'month';
-      type = patterns.month.income.test(text) ? 'income' : 'expenses';
-    } else {
-      // If no clear period found and it's asking about expenses/income, default to today
-      if (patterns.expenses.test(text) || patterns.income.test(text)) {
-        period = 'today';
-        type = patterns.income.test(text) ? 'income' : 'expenses';
-      } else {
-        return null;
+    for (const pattern of patterns) {
+      if (pattern.regex.test(text)) {
+        return pattern.args;
       }
     }
 
-    console.log('✅ Financial query parsed:', { period, type });
+    return null;
+  }
 
-    return {
-      period,
-      type,
+  private async processBasicTransaction(transactionData: any, userContext: UserContext) {
+    // Infer category
+    const category = this.inferCategory(transactionData.description, transactionData.type);
+    
+    const fullTransactionData = {
+      ...transactionData,
+      category
     };
-  }
 
-  private getTodayDate(): string {
-    return new Date().toISOString().split('T')[0];
-  }
-
-  private getYesterdayDate(): string {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    return yesterday.toISOString().split('T')[0];
-  }
-
-  private async processBasicTransaction(
-    data: { amount: number; description: string; type: 'income' | 'expense'; date: string },
-    userContext: UserContext
-  ): Promise<BotResponse> {
-    try {
-      // Default category based on keywords
-      const category = this.inferCategory(data.description, data.type);
-      
-      const transactionData: TransactionData = {
-        amount: data.amount,
-        type: data.type,
-        category,
-        description: data.description,
-        date: data.date
-      };
-
-      return await this.registerTransaction(transactionData, userContext);
-    } catch (error) {
-      console.error('Error processing basic transaction:', error);
-      return {
-        message: "😔 Erro ao processar transação básica. Tente novamente.",
-        success: false,
-      };
-    }
+    return await this.registerTransaction(fullTransactionData, userContext);
   }
 
   private inferCategory(description: string, type: 'income' | 'expense'): string {
@@ -371,880 +1052,67 @@ Mas posso ajudar! ${username}, você pode me dizer:
     return 'Outros';
   }
 
-  private getSystemPrompt(): string {
+  private getDefaultColor(type: 'income' | 'expense'): string {
+    return type === 'income' ? '#22c55e' : '#ef4444';
+  }
+
+  private getDefaultIcon(category: string): string {
+    const icons: { [key: string]: string } = {
+      'Alimentação': '🍽️',
+      'Transporte': '🚗',
+      'Saúde': '🏥',
+      'Lazer': '🎉',
+      'Roupas': '👕',
+      'Salário': '💼',
+      'Freelance': '💻',
+      'Outros': '📦'
+    };
+    return icons[category] || '📦';
+  }
+
+  private getTodayDate(): string {
     const today = new Date();
-    const currentDate = today.toLocaleDateString('pt-BR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    return `Você é um assistente financeiro para o aplicativo FinanceFlow.
-
-DATA ATUAL: ${currentDate}
-
-REGRAS:
-1. Seja amigável e responda a cumprimentos básicos como "oi", "olá", "bom dia"
-2. Para conversas casuais, seja educado mas direcione para finanças de forma natural
-3. Para perguntas totalmente não relacionadas a finanças, responda: "Posso ajudar principalmente com questões financeiras"
-4. Sempre use function calling para registrar transações
-5. Seja amigável mas conciso
-6. Use português brasileiro
-7. Use emojis para deixar as respostas mais amigáveis
-8. SEMPRE chame o usuário pelo nome quando souber. Use o nome do contexto do usuário nas respostas.
-
-CAPACIDADES:
-- Registrar despesas e receitas
-- Consultar resumos financeiros
-- Fornecer insights de gastos
-- Responder perguntas sobre finanças
-- Conversar de forma amigável sobre tópicos relacionados
-
-EXEMPLOS DE CUMPRIMENTOS:
-- "Oi", "Olá" → Responda com "Olá [nome]! 👋 Como posso ajudar com suas finanças hoje?"
-- "Bom dia", "Boa tarde" → Responda adequadamente e pergunte sobre finanças
-- "Como vai?" → Seja educado e direcione para ajuda financeira
-
-CATEGORIAS PADRÃO:
-- Alimentação
-- Transporte
-- Saúde
-- Educação
-- Lazer
-- Moradia
-- Roupas
-- Salário
-- Freelance
-- Investimentos
-
-PROCESSAMENTO DE DATAS - CRÍTICO:
-Use a data atual como referência para todos os cálculos.
-
-REGRAS ESPECÍFICAS PARA DATAS:
-- "hoje" = DATA ATUAL (${today.toISOString().split('T')[0]}) 
-- "ontem" = dia anterior à data atual
-- "anteontem" = dois dias antes da data atual
-- "segunda passada", "terça passada", etc = último dia da semana mencionado
-- "dia 14", "dia 25" = dia específico do mês atual (julho 2025)
-- "dia 14 do mês passado" = dia específico do mês anterior (junho 2025)
-- "segunda-feira", "terça-feira" = próximo ou último dia da semana
-- Se não mencionar data, use a data atual (${today.toISOString().split('T')[0]})
-
-MUITO IMPORTANTE: 
-- Quando usuário disser "hoje", use SEMPRE a data atual: ${today.toISOString().split('T')[0]}
-- Sempre passe a data no campo 'date' como string no formato 'YYYY-MM-DD'
-- NUNCA confunda "hoje" com "ontem"
-
-EXEMPLOS DE INTERPRETAÇÃO DE DATAS:
-- "gastei hoje" → date: "${today.toISOString().split('T')[0]}"
-- "gastei ontem" → date: "${new Date(today.getTime() - 24*60*60*1000).toISOString().split('T')[0]}"
-- "recebi hoje" → date: "${today.toISOString().split('T')[0]}"
-- "gasto de hoje" → date: "${today.toISOString().split('T')[0]}"
-
-PROCESSAMENTO DE TRANSAÇÕES:
-- Para UMA transação: use register_transaction
-- Para MÚLTIPLAS transações na mesma mensagem: use register_multiple_transactions
-- SEMPRE identifique múltiplas transações quando houver múltiplos valores ou itens
-- Palavras-chave para múltiplas transações: "e", "também", "além disso", "mais", "ainda"
-- Exemplo: "gastei 500 com pneu e 200 com lataria" = SEMPRE use register_multiple_transactions
-- Exemplo: "recebi 1000 de salário e 500 de freelance" = SEMPRE use register_multiple_transactions
-- Exemplo: "comprei comida por 50 e também paguei 30 de combustível" = register_multiple_transactions
-
-CONSULTAS FINANCEIRAS:
-Use a função query_finances para perguntas sobre gastos, receitas ou saldos.
-
-EXEMPLOS DE CONSULTAS:
-- "quanto gastei hoje?" → query_finances: period="today", type="expenses"
-- "quanto gastei ontem?" → query_finances: period="yesterday", type="expenses"
-- "quanto gastei esta semana?" → query_finances: period="week", type="expenses"
-- "quanto gastei semana passada?" → query_finances: period="last_week", type="expenses"
-- "quanto gastei este mês?" → query_finances: period="month", type="expenses"
-- "quanto gastei mês passado?" → query_finances: period="last_month", type="expenses"
-- "quanto recebi hoje?" → query_finances: period="today", type="income"
-- "resumo financeiro de hoje" → query_finances: period="today", type="summary"
-- "meu saldo hoje" → query_finances: period="today", type="balance"
-- "quanto gastei com alimentação esta semana?" → query_finances: period="week", type="expenses", category="Alimentação"
-- "quanto gastei hoje vs ontem?" → query_finances: period="today", type="expenses", comparison={period="yesterday"}
-
-TIPOS DE CONSULTA:
-- "expenses" para gastos/despesas
-- "income" para receitas/ganhos
-- "summary" ou "balance" para resumo completo
-- Use "comparison" para comparar períodos diferentes
-
-PERÍODOS VÁLIDOS:
-- "today" = hoje
-- "yesterday" = ontem
-- "week" = esta semana
-- "last_week" = semana passada
-- "month" = este mês
-- "last_month" = mês passado
-- "year" = este ano
-- "last_year" = ano passado`;
+    return today.toISOString().split('T')[0];
   }
 
-  private getFunctionDefinitions() {
-    return [
-      {
-        name: "register_transaction",
-        description: "Registrar uma transação de despesa ou receita",
-        parameters: {
-          type: "object",
-          properties: {
-            amount: {
-              type: "number",
-              description: "Valor da transação",
-            },
-            type: {
-              type: "string",
-              enum: ["income", "expense"],
-              description: "Tipo da transação",
-            },
-            category: {
-              type: "string",
-              description: "Categoria da transação",
-            },
-            description: {
-              type: "string",
-              description: "Descrição da transação",
-            },
-            date: {
-              type: "string",
-              format: "date",
-              description: "Data da transação no formato YYYY-MM-DD. IMPORTANTE: Se o usuário disser 'hoje', use SEMPRE a data atual (2025-07-15). Para 'ontem', use 2025-07-14. Se não especificado, use a data atual.",
-            },
-          },
-          required: ["amount", "type", "category", "description"],
-        },
-      },
-      {
-        name: "register_multiple_transactions",
-        description: "Registrar múltiplas transações de uma vez quando o usuário mencionar várias despesas ou receitas na mesma mensagem",
-        parameters: {
-          type: "object",
-          properties: {
-            transactions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  amount: {
-                    type: "number",
-                    description: "Valor da transação",
-                  },
-                  type: {
-                    type: "string",
-                    enum: ["income", "expense"],
-                    description: "Tipo da transação",
-                  },
-                  category: {
-                    type: "string",
-                    description: "Categoria da transação",
-                  },
-                  description: {
-                    type: "string",
-                    description: "Descrição da transação",
-                  },
-                  date: {
-                    type: "string",
-                    format: "date",
-                    description: "Data da transação no formato YYYY-MM-DD. IMPORTANTE: Se o usuário disser 'hoje', use SEMPRE a data atual (2025-07-15). Para 'ontem', use 2025-07-14. Se não especificado, use a data atual.",
-                  },
-                },
-                required: ["amount", "type", "category", "description"],
-              },
-              description: "Lista de transações para registrar",
-            },
-          },
-          required: ["transactions"],
-        },
-      },
-      {
-        name: "query_finances",
-        description: "Consultar informações financeiras do usuário - suporta períodos flexíveis e comparações",
-        parameters: {
-          type: "object",
-          properties: {
-            period: {
-              type: "string",
-              enum: ["today", "yesterday", "week", "last_week", "month", "last_month", "year", "last_year", "custom"],
-              description: "Período da consulta",
-            },
-            type: {
-              type: "string",
-              enum: ["summary", "expenses", "income", "balance"],
-              description: "Tipo de consulta",
-            },
-            category: {
-              type: "string",
-              description: "Categoria específica para filtrar (opcional)",
-            },
-            startDate: {
-              type: "string",
-              format: "date",
-              description: "Data inicial para período customizado (YYYY-MM-DD)",
-            },
-            endDate: {
-              type: "string",
-              format: "date",
-              description: "Data final para período customizado (YYYY-MM-DD)",
-            },
-            comparison: {
-              type: "object",
-              properties: {
-                period: {
-                  type: "string",
-                  enum: ["today", "yesterday", "week", "last_week", "month", "last_month", "year", "last_year", "custom"],
-                  description: "Período para comparação",
-                },
-                startDate: {
-                  type: "string",
-                  format: "date",
-                  description: "Data inicial para comparação (YYYY-MM-DD)",
-                },
-                endDate: {
-                  type: "string",
-                  format: "date",
-                  description: "Data final para comparação (YYYY-MM-DD)",
-                },
-              },
-              required: ["period"],
-              description: "Parâmetros para comparação entre períodos (opcional)",
-            },
-          },
-          required: ["period", "type"],
-        },
-      },
-    ];
+  private getYesterdayDate(): string {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
   }
 
-  private async handleFunctionCall(
-    functionName: string,
-    argumentsJson: string,
-    userContext: UserContext
-  ): Promise<BotResponse> {
+  private formatDateForMessage(date: Date | string): string {
     try {
-      const args = JSON.parse(argumentsJson);
-
-      if (functionName === "register_transaction") {
-        return await this.registerTransaction(args, userContext);
-      }
-
-      if (functionName === "register_multiple_transactions") {
-        return await this.registerMultipleTransactions(args, userContext);
-      }
-
-      if (functionName === "query_finances") {
-        return await this.queryFinances(args, userContext);
-      }
-
-      return {
-        message: "Função não reconhecida.",
-        success: false,
-      };
-    } catch (error) {
-      console.error('Error handling function call:', error);
-      return {
-        message: "😔 Ocorreu um erro ao processar sua solicitação.",
-        success: false,
-      };
-    }
-  }
-
-  private async registerTransaction(
-    data: TransactionData,
-    userContext: UserContext
-  ): Promise<BotResponse> {
-    try {
+      // Se receber string, converte para Date
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
       
-      // Find or create category
-      let category = await storage.getCategoryByName(data.category, userContext.userId);
-      if (!category) {
-        category = await storage.createCategory({
-          name: data.category,
-          type: data.type,
-          color: '#6B7280',
-          icon: 'category',
-          isDefault: false,
+      // Verifica se a data é válida
+      if (!dateObj || isNaN(dateObj.getTime())) {
+        // Fallback para data atual se inválida
+        const today = new Date();
+        return today.toLocaleDateString('pt-BR', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
         });
       }
-
-      // Parse and validate date with detailed logging
-      let transactionDate: Date;
-      console.log('📅 Date processing - Raw date received:', data.date);
       
-      if (data.date) {
-        transactionDate = new Date(data.date);
-        console.log('📅 Date processing - Parsed date:', transactionDate.toISOString());
-        console.log('📅 Date processing - Local date string:', transactionDate.toLocaleDateString('pt-BR'));
-      } else {
-        transactionDate = new Date();
-        console.log('📅 Date processing - Using current date:', transactionDate.toLocaleDateString('pt-BR'));
-      }
-
-      // Create transaction
-      const transaction = await storage.createTransaction({
-        userId: userContext.userId,
-        amount: data.amount.toString(),
-        type: data.type,
-        categoryId: category.id,
-        description: data.description,
-        transactionDate: transactionDate,
-        source: 'whatsapp',
+      return dateObj.toLocaleDateString('pt-BR', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
-
-      const typeEmoji = data.type === 'income' ? '💰' : '💸';
-      const dateStr = this.formatDateForMessage(transactionDate);
-      
-      console.log('💬 Message generation - Final dateStr:', dateStr);
-      console.log('💬 Message generation - Transaction date:', transactionDate.toISOString());
-      
-      const message = `✅ ${data.type === 'income' ? 'Receita' : 'Despesa'} registrada!
-${typeEmoji} R$ ${data.amount.toFixed(2).replace('.', ',')} - ${data.category}
-📝 ${data.description}
-📅 ${dateStr}`;
-
-      return {
-        message,
-        success: true,
-        data: transaction,
-      };
     } catch (error) {
-      console.error('Error registering transaction:', error);
-      return {
-        message: "😔 Erro ao registrar a transação. Tente novamente.",
-        success: false,
-      };
-    }
-  }
-
-  private async registerMultipleTransactions(
-    data: { transactions: TransactionData[] },
-    userContext: UserContext
-  ): Promise<BotResponse> {
-    try {
-      const results = [];
-      let totalAmount = 0;
-      
-      for (const transactionData of data.transactions) {
-        // Find or create category
-        let category = await storage.getCategoryByName(transactionData.category, userContext.userId);
-        if (!category) {
-          category = await storage.createCategory({
-            name: transactionData.category,
-            type: transactionData.type,
-            color: '#6B7280',
-            icon: 'category',
-            isDefault: false,
-          });
-        }
-
-        // Parse date
-        const transactionDate = transactionData.date ? new Date(transactionData.date) : new Date();
-
-        // Create transaction
-        const transaction = await storage.createTransaction({
-          userId: userContext.userId,
-          amount: transactionData.amount.toString(),
-          type: transactionData.type,
-          categoryId: category.id,
-          description: transactionData.description,
-          transactionDate: transactionDate,
-          source: 'whatsapp',
-        });
-
-        results.push({
-          ...transactionData,
-          transaction,
-          dateStr: this.formatDateForMessage(transactionDate)
-        });
-
-        totalAmount += transactionData.amount;
-      }
-
-      // Create summary message
-      const transactionType = results[0].type;
-      const typeEmoji = transactionType === 'income' ? '💰' : '💸';
-      const typeText = transactionType === 'income' ? 'Receitas' : 'Despesas';
-      
-      let message = `✅ ${results.length} ${typeText.toLowerCase()} registradas!\n\n`;
-      
-      results.forEach((result, index) => {
-        message += `${index + 1}. ${typeEmoji} R$ ${result.amount.toFixed(2).replace('.', ',')} - ${result.category}\n`;
-        message += `   📝 ${result.description}\n`;
-        message += `   📅 ${result.dateStr}\n\n`;
+      console.error('Error formatting date:', error);
+      // Retorna data atual como fallback
+      return new Date().toLocaleDateString('pt-BR', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
-
-      message += `💰 Total: R$ ${totalAmount.toFixed(2).replace('.', ',')}`;
-
-      return {
-        message,
-        success: true,
-        data: results,
-      };
-    } catch (error) {
-      console.error('Error registering multiple transactions:', error);
-      return {
-        message: "😔 Erro ao registrar algumas transações. Tente novamente.",
-        success: false,
-      };
-    }
-  }
-
-  private async queryFinances(
-    query: FinancialQuery,
-    userContext: UserContext
-  ): Promise<BotResponse> {
-    try {
-      const { startDate, endDate } = this.getPeriodDates(query.period, query.startDate, query.endDate);
-      
-      // Debug logs
-      console.log('🔍 Query finances debug:');
-      console.log('- Period:', query.period);
-      console.log('- Type:', query.type);
-      console.log('- Category:', query.category);
-      console.log('- Start date:', startDate.toISOString());
-      console.log('- End date:', endDate.toISOString());
-      console.log('- User ID:', userContext.userId);
-      
-      // Handle comparison queries
-      if (query.comparison) {
-        return await this.handleComparisonQuery(query, userContext, startDate, endDate);
-      }
-      
-      if (query.type === 'summary' || query.type === 'balance') {
-        const balance = await storage.getUserBalance(userContext.userId, startDate, endDate);
-        
-        const periodText = this.getPeriodText(query.period);
-        let message = `📊 Resumo Financeiro - ${periodText}`;
-        
-        if (query.category) {
-          message += ` (${query.category})`;
-        }
-        
-        message += `
-💰 Receitas: R$ ${balance.income.toFixed(2).replace('.', ',')}
-💸 Despesas: R$ ${balance.expense.toFixed(2).replace('.', ',')}
-${balance.balance >= 0 ? '💚' : '❤️'} Saldo: R$ ${balance.balance.toFixed(2).replace('.', ',')}`;
-
-        return {
-          message,
-          success: true,
-          data: balance,
-        };
-      }
-
-      if (query.type === 'expenses' || query.type === 'income') {
-        // Convert plural to singular for database query
-        const dbType = query.type === 'expenses' ? 'expense' : 'income';
-        
-        console.log('🔍 About to call getTransactionsByUserAndType with:');
-        console.log('- userId:', userContext.userId);
-        console.log('- type:', dbType);
-        console.log('- startDate:', startDate);
-        console.log('- endDate:', endDate);
-        console.log('- category:', query.category);
-        
-        const transactions = await storage.getTransactionsByUserAndType(
-          userContext.userId,
-          dbType,
-          startDate,
-          endDate,
-          query.category
-        );
-
-        const total = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
-        const typeEmoji = query.type === 'income' ? '💰' : '💸';
-        const typeText = query.type === 'income' ? 'Receitas' : 'Despesas';
-        const periodText = this.getPeriodText(query.period);
-
-        let message = `${typeEmoji} ${typeText} - ${periodText}`;
-        
-        if (query.category) {
-          message += ` (${query.category})`;
-        }
-        
-        message += `
-Total: R$ ${total.toFixed(2).replace('.', ',')}`;
-
-        if (transactions.length > 0) {
-          message += '\n\n📋 Transações:';
-          transactions.slice(0, 10).forEach(t => {
-            let dateStr = 'Data inválida';
-            try {
-              // Verificar e converter a data da transação
-              const date = t.transactionDate instanceof Date ? t.transactionDate : new Date(t.transactionDate);
-              if (!isNaN(date.getTime())) {
-                dateStr = this.formatDateForMessage(date);
-              }
-            } catch (error) {
-              console.error('🚨 Error formatting transaction date:', error, 'Transaction date:', t.transactionDate);
-            }
-            message += `\n• R$ ${Number(t.amount).toFixed(2).replace('.', ',')} - ${t.description} (${dateStr})`;
-          });
-          
-          if (transactions.length > 10) {
-            message += `\n... e mais ${transactions.length - 10} transações`;
-          }
-        }
-
-        return {
-          message,
-          success: true,
-          data: { transactions, total },
-        };
-      }
-
-      return {
-        message: "Tipo de consulta não reconhecido.",
-        success: false,
-      };
-    } catch (error) {
-      console.error('Error querying finances:', error);
-      return {
-        message: "😔 Erro ao consultar suas finanças. Tente novamente.",
-        success: false,
-      };
-    }
-  }
-
-  private async handleComparisonQuery(
-    query: FinancialQuery,
-    userContext: UserContext,
-    startDate: Date,
-    endDate: Date
-  ): Promise<BotResponse> {
-    try {
-      const { startDate: compStartDate, endDate: compEndDate } = this.getPeriodDates(
-        query.comparison!.period,
-        query.comparison!.startDate,
-        query.comparison!.endDate
-      );
-
-      // Get data for both periods
-      const [currentData, comparisonData] = await Promise.all([
-        this.getFinancialData(query, userContext, startDate, endDate),
-        this.getFinancialData(query, userContext, compStartDate, compEndDate)
-      ]);
-
-      const periodText = this.getPeriodText(query.period);
-      const comparisonPeriodText = this.getPeriodText(query.comparison!.period);
-      
-      let message = `📊 Comparação - ${query.category || 'Todas categorias'}
-
-${periodText}:
-`;
-
-      if (query.type === 'expenses' || query.type === 'income') {
-        const typeEmoji = query.type === 'income' ? '💰' : '💸';
-        const currentTotal = currentData.reduce((sum, t) => sum + Number(t.amount), 0);
-        const comparisonTotal = comparisonData.reduce((sum, t) => sum + Number(t.amount), 0);
-        const difference = currentTotal - comparisonTotal;
-        const percentChange = comparisonTotal > 0 ? ((difference / comparisonTotal) * 100) : 0;
-
-        message += `${typeEmoji} R$ ${currentTotal.toFixed(2).replace('.', ',')}
-
-${comparisonPeriodText}:
-${typeEmoji} R$ ${comparisonTotal.toFixed(2).replace('.', ',')}
-
-📈 Diferença: R$ ${Math.abs(difference).toFixed(2).replace('.', ',')} ${difference >= 0 ? '(mais)' : '(menos)'}
-📊 Variação: ${percentChange.toFixed(1)}%`;
-
-        if (difference > 0) {
-          message += `\n\n💡 Você gastou R$ ${difference.toFixed(2).replace('.', ',')} a mais ${periodText.toLowerCase()} comparado ${comparisonPeriodText.toLowerCase()}.`;
-        } else if (difference < 0) {
-          message += `\n\n💡 Você economizou R$ ${Math.abs(difference).toFixed(2).replace('.', ',')} ${periodText.toLowerCase()} comparado ${comparisonPeriodText.toLowerCase()}.`;
-        } else {
-          message += `\n\n💡 O gasto foi igual nos dois períodos.`;
-        }
-      }
-
-      return {
-        message,
-        success: true,
-        data: { currentData, comparisonData, difference: currentData.length - comparisonData.length },
-      };
-    } catch (error) {
-      console.error('Error handling comparison query:', error);
-      return {
-        message: "😔 Erro ao fazer comparação. Tente novamente.",
-        success: false,
-      };
-    }
-  }
-
-  private async getFinancialData(
-    query: FinancialQuery,
-    userContext: UserContext,
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
-    if (query.type === 'expenses' || query.type === 'income') {
-      return await storage.getTransactionsByUserAndType(
-        userContext.userId,
-        query.type as 'income' | 'expense',
-        startDate,
-        endDate,
-        query.category
-      );
-    }
-    return [];
-  }
-
-  private getPeriodDates(period: string, customStartDate?: string, customEndDate?: string): { startDate: Date; endDate: Date } {
-    const now = new Date();
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    
-    const endDate = new Date(now);
-    endDate.setHours(23, 59, 59, 999);
-    
-    let startDate = new Date(now);
-
-    switch (period) {
-      case 'today':
-        startDate = new Date(today);
-        break;
-      case 'yesterday':
-        startDate = new Date(today);
-        startDate.setDate(today.getDate() - 1);
-        endDate.setTime(startDate.getTime());
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      case 'week':
-        // Esta semana (Segunda a Domingo)
-        startDate = new Date(today);
-        const dayOfWeek = startDate.getDay(); // 0 = domingo, 1 = segunda
-        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Ajustar para segunda-feira
-        startDate.setDate(today.getDate() - daysToMonday);
-        break;
-      case 'last_week':
-        // Semana passada
-        startDate = new Date(today);
-        const lastWeekDayOfWeek = startDate.getDay();
-        const daysToLastMonday = lastWeekDayOfWeek === 0 ? 13 : lastWeekDayOfWeek + 6;
-        startDate.setDate(today.getDate() - daysToLastMonday);
-        endDate.setTime(startDate.getTime());
-        endDate.setDate(startDate.getDate() + 6);
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      case 'month':
-        // Este mês
-        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-        break;
-      case 'last_month':
-        // Mês passado
-        startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        endDate.setTime(new Date(today.getFullYear(), today.getMonth(), 0).getTime());
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      case 'year':
-        // Este ano
-        startDate = new Date(today.getFullYear(), 0, 1);
-        break;
-      case 'last_year':
-        // Ano passado
-        startDate = new Date(today.getFullYear() - 1, 0, 1);
-        endDate.setTime(new Date(today.getFullYear() - 1, 11, 31).getTime());
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      case 'custom':
-        if (customStartDate) {
-          startDate = new Date(customStartDate);
-          startDate.setHours(0, 0, 0, 0);
-        }
-        if (customEndDate) {
-          endDate.setTime(new Date(customEndDate).getTime());
-          endDate.setHours(23, 59, 59, 999);
-        }
-        break;
-    }
-
-    return { startDate, endDate };
-  }
-
-  private getPeriodText(period: string): string {
-    const now = new Date();
-    const months = [
-      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ];
-
-    switch (period) {
-      case 'today':
-        return 'Hoje';
-      case 'yesterday':
-        return 'Ontem';
-      case 'week':
-        return 'Esta semana';
-      case 'last_week':
-        return 'Semana passada';
-      case 'month':
-        return `${months[now.getMonth()]} ${now.getFullYear()}`;
-      case 'last_month':
-        const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-        const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-        return `${months[lastMonth]} ${lastMonthYear}`;
-      case 'year':
-        return `${now.getFullYear()}`;
-      case 'last_year':
-        return `${now.getFullYear() - 1}`;
-      default:
-        return period;
-    }
-  }
-
-  private formatDateForMessage(date: Date): string {
-    try {
-      // Verificar se a data é válida
-      if (!date || isNaN(date.getTime())) {
-        console.error('🚨 formatDateForMessage - Invalid date received:', date);
-        return 'Data inválida';
-      }
-      
-      const today = new Date();
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      
-      // Usar strings das datas para comparação (formato YYYY-MM-DD)
-      const dateStr = date.toISOString().split('T')[0];
-      const todayStr = today.toISOString().split('T')[0]; 
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
-      const isToday = dateStr === todayStr;
-      const isYesterday = dateStr === yesterdayStr;
-      
-      if (isToday) {
-        return 'Hoje';
-      } else if (isYesterday) {
-        return 'Ontem';
-      } else {
-        // Formatação brasileira: dd/mm/aaaa
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear();
-        
-        return `${day}/${month}/${year}`;
-      }
-    } catch (error) {
-      console.error('🚨 Error in formatDateForMessage:', error);
-      return 'Data inválida';
-    }
-  }
-
-  private async buildConversationContext(userId: string): Promise<Array<{role: 'user' | 'assistant', content: string}>> {
-    const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
-    
-    try {
-      // Get conversation summary if exists
-      const summary = await storage.getConversationSummary(userId);
-      if (summary && summary.summary) {
-        messages.push({
-          role: 'assistant',
-          content: `[RESUMO DAS CONVERSAS ANTERIORES]: ${summary.summary}`
-        });
-      }
-
-      // Get recent conversations (last 5)
-      const recentConversations = await storage.getRecentConversations(userId, 5);
-      
-      // Add recent conversations in reverse order (oldest first)
-      for (const conv of recentConversations.reverse()) {
-        messages.push({
-          role: 'user',
-          content: conv.userMessage
-        });
-        messages.push({
-          role: 'assistant',
-          content: conv.botResponse
-        });
-      }
-    } catch (error) {
-      console.error('Error building conversation context (using fallback):', error);
-      // Continue without conversation history if tables don't exist
-    }
-
-    return messages;
-  }
-
-  private async saveConversationToHistory(userMessage: string, botResponse: string, userContext: UserContext): Promise<void> {
-    try {
-      // Determine message type
-      let messageType = 'chat';
-      if (userMessage.toLowerCase().includes('gastei') || userMessage.toLowerCase().includes('recebi') || 
-          userMessage.toLowerCase().includes('r$') || userMessage.toLowerCase().includes('real')) {
-        messageType = 'transaction';
-      } else if (userMessage.toLowerCase().includes('saldo') || userMessage.toLowerCase().includes('resumo') ||
-                 userMessage.toLowerCase().includes('gastos') || userMessage.toLowerCase().includes('receitas')) {
-        messageType = 'query';
-      }
-
-      // Save current conversation
-      await storage.saveConversation({
-        userId: userContext.userId,
-        phone: userContext.phone,
-        userMessage,
-        botResponse,
-        messageType
-      });
-
-      // Get total conversation count
-      const allConversations = await storage.getRecentConversations(userContext.userId, 100);
-      
-      // If we have more than 10 conversations, create/update summary and clean old ones
-      if (allConversations.length > 10) {
-        await this.updateConversationSummary(userContext.userId, allConversations);
-        await storage.deleteOldConversations(userContext.userId, 5); // Keep only last 5
-      }
-    } catch (error) {
-      console.error('Error saving conversation to history (conversation will work without history):', error);
-      // Don't fail the main conversation if history saving fails
-      // This allows the bot to work even without conversation_history and conversation_summary tables
-    }
-  }
-
-  private async updateConversationSummary(userId: string, conversations: any[]): Promise<void> {
-    try {
-      // Get conversations older than the last 5 for summarization
-      const conversationsToSummarize = conversations.slice(5);
-      
-      if (conversationsToSummarize.length === 0) return;
-
-      // Create summary of older conversations
-      const conversationText = conversationsToSummarize
-        .map(conv => `Usuário: ${conv.userMessage}\nBot: ${conv.botResponse}`)
-        .join('\n\n');
-
-      const summaryPrompt = `Crie um resumo conciso das seguintes conversas financeiras, destacando:
-- Principais transações registradas
-- Padrões de gastos do usuário
-- Categorias mais usadas
-- Questões recorrentes
-
-Conversas:
-${conversationText}
-
-Resumo (máximo 200 palavras):`;
-
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: summaryPrompt,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 300,
-      });
-
-      const summary = response.choices[0].message.content || '';
-      
-      // Update summary in database
-      await storage.updateConversationSummary(userId, summary, conversationsToSummarize.length);
-    } catch (error) {
-      console.error('Error updating conversation summary:', error);
     }
   }
 }
