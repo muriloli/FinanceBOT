@@ -140,7 +140,15 @@ Quando o usuário mencionar uma data específica, extraia e converta para format
 
 IMPORTANTE: Sempre passe a data no campo 'date' como string no formato 'YYYY-MM-DD'.
 
-Quando o usuário mencionar uma transação, extraia as informações e use a função register_transaction.
+PROCESSAMENTO DE TRANSAÇÕES:
+- Para UMA transação: use register_transaction
+- Para MÚLTIPLAS transações na mesma mensagem: use register_multiple_transactions
+- SEMPRE identifique múltiplas transações quando houver múltiplos valores ou itens
+- Palavras-chave para múltiplas transações: "e", "também", "além disso", "mais", "ainda"
+- Exemplo: "gastei 500 com pneu e 200 com lataria" = SEMPRE use register_multiple_transactions
+- Exemplo: "recebi 1000 de salário e 500 de freelance" = SEMPRE use register_multiple_transactions
+- Exemplo: "comprei comida por 50 e também paguei 30 de combustível" = register_multiple_transactions
+
 Para consultas sobre finanças, use a função query_finances.`;
   }
 
@@ -179,6 +187,48 @@ Para consultas sobre finanças, use a função query_finances.`;
         },
       },
       {
+        name: "register_multiple_transactions",
+        description: "Registrar múltiplas transações de uma vez quando o usuário mencionar várias despesas ou receitas na mesma mensagem",
+        parameters: {
+          type: "object",
+          properties: {
+            transactions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  amount: {
+                    type: "number",
+                    description: "Valor da transação",
+                  },
+                  type: {
+                    type: "string",
+                    enum: ["income", "expense"],
+                    description: "Tipo da transação",
+                  },
+                  category: {
+                    type: "string",
+                    description: "Categoria da transação",
+                  },
+                  description: {
+                    type: "string",
+                    description: "Descrição da transação",
+                  },
+                  date: {
+                    type: "string",
+                    format: "date",
+                    description: "Data da transação no formato YYYY-MM-DD. IMPORTANTE: Se o usuário disser 'hoje', use SEMPRE a data atual (2025-07-15). Para 'ontem', use 2025-07-14. Se não especificado, use a data atual.",
+                  },
+                },
+                required: ["amount", "type", "category", "description"],
+              },
+              description: "Lista de transações para registrar",
+            },
+          },
+          required: ["transactions"],
+        },
+      },
+      {
         name: "query_finances",
         description: "Consultar informações financeiras do usuário",
         parameters: {
@@ -211,6 +261,10 @@ Para consultas sobre finanças, use a função query_finances.`;
 
       if (functionName === "register_transaction") {
         return await this.registerTransaction(args, userContext);
+      }
+
+      if (functionName === "register_multiple_transactions") {
+        return await this.registerMultipleTransactions(args, userContext);
       }
 
       if (functionName === "query_finances") {
@@ -284,6 +338,79 @@ ${typeEmoji} R$ ${data.amount.toFixed(2).replace('.', ',')} - ${data.category}
       console.error('Error registering transaction:', error);
       return {
         message: "😔 Erro ao registrar a transação. Tente novamente.",
+        success: false,
+      };
+    }
+  }
+
+  private async registerMultipleTransactions(
+    data: { transactions: TransactionData[] },
+    userContext: UserContext
+  ): Promise<BotResponse> {
+    try {
+      const results = [];
+      let totalAmount = 0;
+      
+      for (const transactionData of data.transactions) {
+        // Find or create category
+        let category = await storage.getCategoryByName(transactionData.category, userContext.userId);
+        if (!category) {
+          category = await storage.createCategory({
+            name: transactionData.category,
+            type: transactionData.type,
+            color: '#6B7280',
+            icon: 'category',
+            isDefault: false,
+          });
+        }
+
+        // Parse date
+        const transactionDate = transactionData.date ? new Date(transactionData.date) : new Date();
+
+        // Create transaction
+        const transaction = await storage.createTransaction({
+          userId: userContext.userId,
+          amount: transactionData.amount.toString(),
+          type: transactionData.type,
+          categoryId: category.id,
+          description: transactionData.description,
+          transactionDate: transactionDate,
+          source: 'whatsapp',
+        });
+
+        results.push({
+          ...transactionData,
+          transaction,
+          dateStr: this.formatDateForMessage(transactionDate)
+        });
+
+        totalAmount += transactionData.amount;
+      }
+
+      // Create summary message
+      const transactionType = results[0].type;
+      const typeEmoji = transactionType === 'income' ? '💰' : '💸';
+      const typeText = transactionType === 'income' ? 'Receitas' : 'Despesas';
+      
+      let message = `✅ ${results.length} ${typeText.toLowerCase()} registradas!\n\n`;
+      
+      results.forEach((result, index) => {
+        message += `${index + 1}. ${typeEmoji} R$ ${result.amount.toFixed(2).replace('.', ',')} - ${result.category}\n`;
+        message += `   📝 ${result.description}\n`;
+        message += `   📅 ${result.dateStr}\n\n`;
+      });
+
+      message += `💰 Total: R$ ${totalAmount.toFixed(2).replace('.', ',')}`;
+
+      return {
+        message,
+        success: true,
+        data: results,
+      };
+    } catch (error) {
+      console.error('Error registering multiple transactions:', error);
+      return {
+        message: "😔 Erro ao registrar algumas transações. Tente novamente.",
         success: false,
       };
     }

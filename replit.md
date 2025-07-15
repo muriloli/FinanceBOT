@@ -25,6 +25,9 @@ This is a backend-only WhatsApp AI bot that integrates with the existing Finance
 - Added robust error handling for conversation history tables - bot works with or without these tables
 - Created database migration script for missing conversation tables
 - Enhanced debugging capabilities for transaction processing
+- **Implemented multiple transaction processing**: Bot now identifies and processes multiple transactions in a single message
+- Added register_multiple_transactions function for handling complex expense/income descriptions
+- Enhanced AI prompt to recognize patterns like "gastei X com Y e Z com W" as separate transactions
 - Migration completed - project fully functional and ready for production
 
 ## User Preferences
