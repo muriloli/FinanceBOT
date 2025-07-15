@@ -373,7 +373,37 @@ PROCESSAMENTO DE TRANSAÇÕES:
 - Exemplo: "recebi 1000 de salário e 500 de freelance" = SEMPRE use register_multiple_transactions
 - Exemplo: "comprei comida por 50 e também paguei 30 de combustível" = register_multiple_transactions
 
-Para consultas sobre finanças, use a função query_finances.`;
+CONSULTAS FINANCEIRAS:
+Use a função query_finances para perguntas sobre gastos, receitas ou saldos.
+
+EXEMPLOS DE CONSULTAS:
+- "quanto gastei hoje?" → query_finances: period="today", type="expenses"
+- "quanto gastei ontem?" → query_finances: period="yesterday", type="expenses"
+- "quanto gastei esta semana?" → query_finances: period="week", type="expenses"
+- "quanto gastei semana passada?" → query_finances: period="last_week", type="expenses"
+- "quanto gastei este mês?" → query_finances: period="month", type="expenses"
+- "quanto gastei mês passado?" → query_finances: period="last_month", type="expenses"
+- "quanto recebi hoje?" → query_finances: period="today", type="income"
+- "resumo financeiro de hoje" → query_finances: period="today", type="summary"
+- "meu saldo hoje" → query_finances: period="today", type="balance"
+- "quanto gastei com alimentação esta semana?" → query_finances: period="week", type="expenses", category="Alimentação"
+- "quanto gastei hoje vs ontem?" → query_finances: period="today", type="expenses", comparison={period="yesterday"}
+
+TIPOS DE CONSULTA:
+- "expenses" para gastos/despesas
+- "income" para receitas/ganhos
+- "summary" ou "balance" para resumo completo
+- Use "comparison" para comparar períodos diferentes
+
+PERÍODOS VÁLIDOS:
+- "today" = hoje
+- "yesterday" = ontem
+- "week" = esta semana
+- "last_week" = semana passada
+- "month" = este mês
+- "last_month" = mês passado
+- "year" = este ano
+- "last_year" = ano passado`;
   }
 
   private getFunctionDefinitions() {
@@ -454,19 +484,55 @@ Para consultas sobre finanças, use a função query_finances.`;
       },
       {
         name: "query_finances",
-        description: "Consultar informações financeiras do usuário",
+        description: "Consultar informações financeiras do usuário - suporta períodos flexíveis e comparações",
         parameters: {
           type: "object",
           properties: {
             period: {
               type: "string",
-              enum: ["today", "week", "month", "year"],
+              enum: ["today", "yesterday", "week", "last_week", "month", "last_month", "year", "last_year", "custom"],
               description: "Período da consulta",
             },
             type: {
               type: "string",
               enum: ["summary", "expenses", "income", "balance"],
               description: "Tipo de consulta",
+            },
+            category: {
+              type: "string",
+              description: "Categoria específica para filtrar (opcional)",
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              description: "Data inicial para período customizado (YYYY-MM-DD)",
+            },
+            endDate: {
+              type: "string",
+              format: "date",
+              description: "Data final para período customizado (YYYY-MM-DD)",
+            },
+            comparison: {
+              type: "object",
+              properties: {
+                period: {
+                  type: "string",
+                  enum: ["today", "yesterday", "week", "last_week", "month", "last_month", "year", "last_year", "custom"],
+                  description: "Período para comparação",
+                },
+                startDate: {
+                  type: "string",
+                  format: "date",
+                  description: "Data inicial para comparação (YYYY-MM-DD)",
+                },
+                endDate: {
+                  type: "string",
+                  format: "date",
+                  description: "Data final para comparação (YYYY-MM-DD)",
+                },
+              },
+              required: ["period"],
+              description: "Parâmetros para comparação entre períodos (opcional)",
             },
           },
           required: ["period", "type"],
@@ -653,13 +719,33 @@ ${typeEmoji} R$ ${data.amount.toFixed(2).replace('.', ',')} - ${data.category}
     userContext: UserContext
   ): Promise<BotResponse> {
     try {
-      const { startDate, endDate } = this.getPeriodDates(query.period);
+      const { startDate, endDate } = this.getPeriodDates(query.period, query.startDate, query.endDate);
+      
+      // Debug logs
+      console.log('🔍 Query finances debug:');
+      console.log('- Period:', query.period);
+      console.log('- Type:', query.type);
+      console.log('- Category:', query.category);
+      console.log('- Start date:', startDate.toISOString());
+      console.log('- End date:', endDate.toISOString());
+      console.log('- User ID:', userContext.userId);
+      
+      // Handle comparison queries
+      if (query.comparison) {
+        return await this.handleComparisonQuery(query, userContext, startDate, endDate);
+      }
       
       if (query.type === 'summary' || query.type === 'balance') {
         const balance = await storage.getUserBalance(userContext.userId, startDate, endDate);
         
         const periodText = this.getPeriodText(query.period);
-        const message = `📊 Resumo Financeiro - ${periodText}
+        let message = `📊 Resumo Financeiro - ${periodText}`;
+        
+        if (query.category) {
+          message += ` (${query.category})`;
+        }
+        
+        message += `
 💰 Receitas: R$ ${balance.income.toFixed(2).replace('.', ',')}
 💸 Despesas: R$ ${balance.expense.toFixed(2).replace('.', ',')}
 ${balance.balance >= 0 ? '💚' : '❤️'} Saldo: R$ ${balance.balance.toFixed(2).replace('.', ',')}`;
@@ -672,11 +758,19 @@ ${balance.balance >= 0 ? '💚' : '❤️'} Saldo: R$ ${balance.balance.toFixed(
       }
 
       if (query.type === 'expenses' || query.type === 'income') {
+        console.log('🔍 About to call getTransactionsByUserAndType with:');
+        console.log('- userId:', userContext.userId);
+        console.log('- type:', query.type);
+        console.log('- startDate:', startDate);
+        console.log('- endDate:', endDate);
+        console.log('- category:', query.category);
+        
         const transactions = await storage.getTransactionsByUserAndType(
           userContext.userId,
           query.type as 'income' | 'expense',
           startDate,
-          endDate
+          endDate,
+          query.category
         );
 
         const total = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
@@ -684,14 +778,26 @@ ${balance.balance >= 0 ? '💚' : '❤️'} Saldo: R$ ${balance.balance.toFixed(
         const typeText = query.type === 'income' ? 'Receitas' : 'Despesas';
         const periodText = this.getPeriodText(query.period);
 
-        let message = `${typeEmoji} ${typeText} - ${periodText}
+        let message = `${typeEmoji} ${typeText} - ${periodText}`;
+        
+        if (query.category) {
+          message += ` (${query.category})`;
+        }
+        
+        message += `
 Total: R$ ${total.toFixed(2).replace('.', ',')}`;
 
         if (transactions.length > 0) {
-          message += '\n\n📋 Últimas transações:';
-          transactions.slice(0, 5).forEach(t => {
-            message += `\n• R$ ${Number(t.amount).toFixed(2).replace('.', ',')} - ${t.description}`;
+          message += '\n\n📋 Transações:';
+          transactions.slice(0, 10).forEach(t => {
+            const date = new Date(t.transactionDate);
+            const dateStr = this.formatDateForMessage(date);
+            message += `\n• R$ ${Number(t.amount).toFixed(2).replace('.', ',')} - ${t.description} (${dateStr})`;
           });
+          
+          if (transactions.length > 10) {
+            message += `\n... e mais ${transactions.length - 10} transações`;
+          }
         }
 
         return {
@@ -714,24 +820,155 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
     }
   }
 
-  private getPeriodDates(period: string): { startDate: Date; endDate: Date } {
+  private async handleComparisonQuery(
+    query: FinancialQuery,
+    userContext: UserContext,
+    startDate: Date,
+    endDate: Date
+  ): Promise<BotResponse> {
+    try {
+      const { startDate: compStartDate, endDate: compEndDate } = this.getPeriodDates(
+        query.comparison!.period,
+        query.comparison!.startDate,
+        query.comparison!.endDate
+      );
+
+      // Get data for both periods
+      const [currentData, comparisonData] = await Promise.all([
+        this.getFinancialData(query, userContext, startDate, endDate),
+        this.getFinancialData(query, userContext, compStartDate, compEndDate)
+      ]);
+
+      const periodText = this.getPeriodText(query.period);
+      const comparisonPeriodText = this.getPeriodText(query.comparison!.period);
+      
+      let message = `📊 Comparação - ${query.category || 'Todas categorias'}
+
+${periodText}:
+`;
+
+      if (query.type === 'expenses' || query.type === 'income') {
+        const typeEmoji = query.type === 'income' ? '💰' : '💸';
+        const currentTotal = currentData.reduce((sum, t) => sum + Number(t.amount), 0);
+        const comparisonTotal = comparisonData.reduce((sum, t) => sum + Number(t.amount), 0);
+        const difference = currentTotal - comparisonTotal;
+        const percentChange = comparisonTotal > 0 ? ((difference / comparisonTotal) * 100) : 0;
+
+        message += `${typeEmoji} R$ ${currentTotal.toFixed(2).replace('.', ',')}
+
+${comparisonPeriodText}:
+${typeEmoji} R$ ${comparisonTotal.toFixed(2).replace('.', ',')}
+
+📈 Diferença: R$ ${Math.abs(difference).toFixed(2).replace('.', ',')} ${difference >= 0 ? '(mais)' : '(menos)'}
+📊 Variação: ${percentChange.toFixed(1)}%`;
+
+        if (difference > 0) {
+          message += `\n\n💡 Você gastou R$ ${difference.toFixed(2).replace('.', ',')} a mais ${periodText.toLowerCase()} comparado ${comparisonPeriodText.toLowerCase()}.`;
+        } else if (difference < 0) {
+          message += `\n\n💡 Você economizou R$ ${Math.abs(difference).toFixed(2).replace('.', ',')} ${periodText.toLowerCase()} comparado ${comparisonPeriodText.toLowerCase()}.`;
+        } else {
+          message += `\n\n💡 O gasto foi igual nos dois períodos.`;
+        }
+      }
+
+      return {
+        message,
+        success: true,
+        data: { currentData, comparisonData, difference: currentData.length - comparisonData.length },
+      };
+    } catch (error) {
+      console.error('Error handling comparison query:', error);
+      return {
+        message: "😔 Erro ao fazer comparação. Tente novamente.",
+        success: false,
+      };
+    }
+  }
+
+  private async getFinancialData(
+    query: FinancialQuery,
+    userContext: UserContext,
+    startDate: Date,
+    endDate: Date
+  ): Promise<any[]> {
+    if (query.type === 'expenses' || query.type === 'income') {
+      return await storage.getTransactionsByUserAndType(
+        userContext.userId,
+        query.type as 'income' | 'expense',
+        startDate,
+        endDate,
+        query.category
+      );
+    }
+    return [];
+  }
+
+  private getPeriodDates(period: string, customStartDate?: string, customEndDate?: string): { startDate: Date; endDate: Date } {
     const now = new Date();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    
     const endDate = new Date(now);
+    endDate.setHours(23, 59, 59, 999);
+    
     let startDate = new Date(now);
 
     switch (period) {
       case 'today':
-        startDate.setHours(0, 0, 0, 0);
+        startDate = new Date(today);
+        break;
+      case 'yesterday':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 1);
+        endDate.setTime(startDate.getTime());
         endDate.setHours(23, 59, 59, 999);
         break;
       case 'week':
-        startDate.setDate(now.getDate() - 7);
+        // Esta semana (Segunda a Domingo)
+        startDate = new Date(today);
+        const dayOfWeek = startDate.getDay(); // 0 = domingo, 1 = segunda
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Ajustar para segunda-feira
+        startDate.setDate(today.getDate() - daysToMonday);
+        break;
+      case 'last_week':
+        // Semana passada
+        startDate = new Date(today);
+        const lastWeekDayOfWeek = startDate.getDay();
+        const daysToLastMonday = lastWeekDayOfWeek === 0 ? 13 : lastWeekDayOfWeek + 6;
+        startDate.setDate(today.getDate() - daysToLastMonday);
+        endDate.setTime(startDate.getTime());
+        endDate.setDate(startDate.getDate() + 6);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'month':
-        startDate.setMonth(now.getMonth() - 1);
+        // Este mês
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        break;
+      case 'last_month':
+        // Mês passado
+        startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        endDate.setTime(new Date(today.getFullYear(), today.getMonth(), 0).getTime());
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'year':
-        startDate.setFullYear(now.getFullYear() - 1);
+        // Este ano
+        startDate = new Date(today.getFullYear(), 0, 1);
+        break;
+      case 'last_year':
+        // Ano passado
+        startDate = new Date(today.getFullYear() - 1, 0, 1);
+        endDate.setTime(new Date(today.getFullYear() - 1, 11, 31).getTime());
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'custom':
+        if (customStartDate) {
+          startDate = new Date(customStartDate);
+          startDate.setHours(0, 0, 0, 0);
+        }
+        if (customEndDate) {
+          endDate.setTime(new Date(customEndDate).getTime());
+          endDate.setHours(23, 59, 59, 999);
+        }
         break;
     }
 
@@ -748,12 +985,22 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
     switch (period) {
       case 'today':
         return 'Hoje';
+      case 'yesterday':
+        return 'Ontem';
       case 'week':
-        return 'Últimos 7 dias';
+        return 'Esta semana';
+      case 'last_week':
+        return 'Semana passada';
       case 'month':
         return `${months[now.getMonth()]} ${now.getFullYear()}`;
+      case 'last_month':
+        const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+        const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        return `${months[lastMonth]} ${lastMonthYear}`;
       case 'year':
         return `${now.getFullYear()}`;
+      case 'last_year':
+        return `${now.getFullYear() - 1}`;
       default:
         return period;
     }

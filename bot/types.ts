@@ -52,8 +52,16 @@ export interface TransactionData {
 }
 
 export interface FinancialQuery {
-  period: 'today' | 'week' | 'month' | 'year';
+  period: 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'year' | 'last_year' | 'custom';
   type: 'summary' | 'expenses' | 'income' | 'balance';
+  category?: string;
+  startDate?: string;
+  endDate?: string;
+  comparison?: {
+    period: 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'year' | 'last_year' | 'custom';
+    startDate?: string;
+    endDate?: string;
+  };
 }
 
 export interface BotResponse {

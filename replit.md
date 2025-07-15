@@ -33,6 +33,15 @@ This is a backend-only WhatsApp AI bot that integrates with the existing Finance
 - Implemented basic transaction parsing system that works without OpenAI API for testing
 - Enhanced user experience with proper Portuguese date formatting and responses
 - Migration completed - project fully functional and ready for production
+- **Fixed date interpretation bug**: Bot now correctly interprets "hoje" as current date, "ontem" as previous day in both processing and response messages
+- **Enhanced financial query system**: Complete overhaul of query_finances function with support for:
+  - Multiple periods: today, yesterday, week, last_week, month, last_month, year, last_year
+  - Category filtering for specific expense/income types
+  - Comparison queries between different periods
+  - Improved date range calculations and SQL queries
+  - Better error handling and debug logging
+- **Improved AI prompt system**: Enhanced OpenAI prompts with clear examples for financial queries
+- **Storage layer improvements**: Added category filtering support in database queries
 
 ## User Preferences
 

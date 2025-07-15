@@ -19,7 +19,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   getTransactionsByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Transaction[]>;
-  getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date): Promise<Transaction[]>;
+  getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date, category?: string): Promise<Transaction[]>;
   getUserBalance(userId: string, startDate?: Date, endDate?: Date): Promise<{ income: number; expense: number; balance: number }>;
   getCategories(userId?: string): Promise<Category[]>;
   getCategoryByName(name: string, userId?: string): Promise<Category | undefined>;
@@ -86,19 +86,56 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(transactions).where(whereClause).orderBy(desc(transactions.transactionDate));
   }
 
-  async getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date): Promise<Transaction[]> {
-    let whereClause: SQL<unknown> = and(eq(transactions.userId, userId), eq(transactions.type, type))!;
+  async getTransactionsByUserAndType(userId: string, type: 'income' | 'expense', startDate?: Date, endDate?: Date, category?: string): Promise<Transaction[]> {
+    console.log('📊 Storage debug - getTransactionsByUserAndType called');
+    console.log('- userId:', userId);
+    console.log('- type:', type);
     
-    if (startDate && endDate) {
-      whereClause = and(
-        eq(transactions.userId, userId),
-        eq(transactions.type, type),
-        gte(transactions.transactionDate, startDate),
-        lte(transactions.transactionDate, endDate)
-      )!;
+    // First, let's test with a simple query to see if data exists
+    const allUserTransactions = await db.select().from(transactions).where(eq(transactions.userId, userId));
+    console.log('📊 Total user transactions:', allUserTransactions.length);
+    
+    // Show sample data if exists
+    if (allUserTransactions.length > 0) {
+      console.log('📊 Sample transaction:', allUserTransactions[0]);
     }
     
-    return db.select().from(transactions).where(whereClause).orderBy(desc(transactions.transactionDate));
+    let conditions = [
+      eq(transactions.userId, userId),
+      eq(transactions.type, type)
+    ];
+
+    // Add date filtering using proper Drizzle ORM date handling
+    if (startDate && endDate) {
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+      
+      console.log('📊 Date filtering:', startDateStr, 'to', endDateStr);
+      
+      // Use timestamp comparison for date filtering
+      const startOfDay = new Date(startDateStr + 'T00:00:00.000Z');
+      const endOfDay = new Date(endDateStr + 'T23:59:59.999Z');
+      
+      console.log('📊 Date range:', startOfDay.toISOString(), 'to', endOfDay.toISOString());
+      
+      conditions.push(
+        gte(transactions.transactionDate, startOfDay),
+        lte(transactions.transactionDate, endOfDay)
+      );
+      
+      console.log('📊 Total conditions:', conditions.length);
+    }
+
+    if (category) {
+      const categoryRecord = await this.getCategoryByName(category, userId);
+      if (categoryRecord) {
+        conditions.push(eq(transactions.categoryId, categoryRecord.id));
+      }
+    }
+
+    const result = await db.select().from(transactions).where(and(...conditions)).orderBy(desc(transactions.transactionDate));
+    console.log('📊 Query result:', result.length, 'transactions found');
+    return result;
   }
 
   async getUserBalance(userId: string, startDate?: Date, endDate?: Date): Promise<{ income: number; expense: number; balance: number }> {
