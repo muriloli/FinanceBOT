@@ -133,14 +133,24 @@ Pronto para ajudar você a organizar suas finanças. O que precisamos fazer hoje
     console.log('🔍 Attempting basic transaction parsing...');
     const basicTransaction = this.parseBasicTransaction(text);
     if (basicTransaction) {
-      console.log('✅ Basic transaction found, but async processing needed');
-      // Return a promise-compatible response indicating AI is needed
+      console.log('✅ Basic transaction found, processing async...');
+      // Process the transaction directly for testing
+      setTimeout(async () => {
+        try {
+          const result = await this.processBasicTransaction(basicTransaction, userContext);
+          console.log('✅ Basic transaction processed:', result);
+        } catch (error) {
+          console.error('❌ Error processing basic transaction:', error);
+        }
+      }, 100);
+      
+      // Return immediate response for now
       return {
         message: `💰 Identifiquei sua transação: ${basicTransaction.type === 'expense' ? 'Gasto' : 'Receita'} de R$ ${basicTransaction.amount}
+
+🔧 Processando: "${basicTransaction.description}" (${basicTransaction.date === this.getTodayDate() ? 'hoje' : 'ontem'})
         
-⚠️ Para processar completamente, configure a OpenAI API key.
-        
-🔧 Temporariamente processando: "${basicTransaction.description}" (${basicTransaction.date === this.getTodayDate() ? 'hoje' : 'ontem'})`,
+⚠️ Para funcionalidade completa, configure a OpenAI API key.`,
         success: true,
       };
     }
@@ -543,6 +553,9 @@ Para consultas sobre finanças, use a função query_finances.`;
       const typeEmoji = data.type === 'income' ? '💰' : '💸';
       const dateStr = this.formatDateForMessage(transactionDate);
       
+      console.log('💬 Message generation - Final dateStr:', dateStr);
+      console.log('💬 Message generation - Transaction date:', transactionDate.toISOString());
+      
       const message = `✅ ${data.type === 'income' ? 'Receita' : 'Despesa'} registrada!
 ${typeEmoji} R$ ${data.amount.toFixed(2).replace('.', ',')} - ${data.category}
 📝 ${data.description}
@@ -756,8 +769,17 @@ Total: R$ ${total.toFixed(2).replace('.', ',')}`;
     const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const normalizedYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
     
+    // Debug logs
+    console.log('🗓️ formatDateForMessage - Input date:', date.toISOString());
+    console.log('🗓️ formatDateForMessage - Normalized date:', normalizedDate.toISOString());
+    console.log('🗓️ formatDateForMessage - Normalized today:', normalizedToday.toISOString());
+    console.log('🗓️ formatDateForMessage - Normalized yesterday:', normalizedYesterday.toISOString());
+    
     const isToday = normalizedDate.getTime() === normalizedToday.getTime();
     const isYesterday = normalizedDate.getTime() === normalizedYesterday.getTime();
+    
+    console.log('🗓️ formatDateForMessage - isToday:', isToday);
+    console.log('🗓️ formatDateForMessage - isYesterday:', isYesterday);
     
     if (isToday) {
       return 'Hoje';

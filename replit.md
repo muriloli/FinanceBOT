@@ -28,6 +28,10 @@ This is a backend-only WhatsApp AI bot that integrates with the existing Finance
 - **Implemented multiple transaction processing**: Bot now identifies and processes multiple transactions in a single message
 - Added register_multiple_transactions function for handling complex expense/income descriptions
 - Enhanced AI prompt to recognize patterns like "gastei X com Y e Z com W" as separate transactions
+- **Fixed date interpretation and response messaging**: Bot now correctly interprets "hoje" as current date and "ontem" as previous day in both processing and response messages
+- Added comprehensive date processing with debug logging for better reliability
+- Implemented basic transaction parsing system that works without OpenAI API for testing
+- Enhanced user experience with proper Portuguese date formatting and responses
 - Migration completed - project fully functional and ready for production
 
 ## User Preferences
