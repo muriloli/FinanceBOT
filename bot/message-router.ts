@@ -21,7 +21,7 @@ export class MessageRouter {
       const userContext = await this.getUserContext(message.from);
       
       if (!userContext) {
-        await this.handleUnauthenticatedUser(message.from);
+        //await this.handleUnauthenticatedUser(message.from);
         return;
       }
 
@@ -65,6 +65,7 @@ export class MessageRouter {
         "😔 Ocorreu um erro. Tente novamente em alguns instantes."
       );
     }
+    
   }
 
   private async getUserContext(phone: string): Promise<UserContext | null> {
@@ -98,38 +99,36 @@ export class MessageRouter {
         }
       }
       
-      if (user) {
-        console.log(`👤 User found: ${user.name} (ID: ${user.id})`);
-        return {
-          userId: user.id,
-          phone: phone,
-          username: user.name,
-        };
+      // 🚨 VERIFICAÇÃO 1: Usuário não encontrado
+      if (!user) {
+        console.log(`❌ No user found for phone: ${phone}`);
+        await this.handleUserNotFound(phone);
+        return null;
       }
-
-      console.log(`❌ No user found for phone: ${phone}`);
-      return null;
+      
+      // 🚨 VERIFICAÇÃO 2: Usuário encontrado mas inativo
+      if (!user.isActive) {
+        console.log(`⚠️ User found but inactive: ${user.name} (ID: ${user.id})`);
+        await this.handleInactiveUser(phone, user.name);
+        return null;
+      }
+      
+      // ✅ VERIFICAÇÃO 3: Usuário ativo - tudo OK
+      console.log(`👤 User found and active: ${user.name} (ID: ${user.id})`);
+      return {
+        userId: user.id,
+        phone: phone,
+        username: user.name,
+      };
+      
     } catch (error) {
       console.error('Error getting user context:', error);
       return null;
     }
   }
 
-  private async handleUnauthenticatedUser(phone: string): Promise<void> {
-    const message = `👋 Olá! Parece que você ainda não está cadastrado no FinanceFlow.
-
-Para usar o bot, você precisa:
-1. Fazer login no app FinanceFlow
-2. Cadastrar este número de telefone em seu perfil
-3. Voltar aqui e enviar uma mensagem
-
-Após isso, poderei ajudar você a gerenciar suas finanças! 💰`;
-
-    await this.whatsappClient.sendMessage(phone, message);
-  }
-
-  async sendWelcomeMessage(phone: string): Promise<void> {
-    const message = `🎉 Bem-vindo ao FinanceFlow Bot!
+async sendWelcomeMessage(phone: string): Promise<void> {
+  const message = `🎉 Bem-vindo ao FinanceFlow Bot!
 
 Agora você pode registrar suas transações financeiras diretamente pelo WhatsApp!
 
@@ -152,4 +151,35 @@ Como posso ajudar você hoje? 😊`;
 
     await this.whatsappClient.sendMessage(phone, message);
   }
+
+  // 📞 FUNÇÃO 1: Usuário não encontrado
+  private async handleUserNotFound(phone: string): Promise<void> {
+    const message = `👋 Olá! 
+
+  ❌ Você ainda não possui cadastro em nosso sistema.
+
+  📞 Para utilizar o FinanceFlow Bot, entre em contato conosco pelo telefone:
+
+  *(66) 99671-6331*
+
+  Nossa equipe te ajudará com o cadastro! 😊`;
+
+    await this.whatsappClient.sendMessage(phone, message);
+  }
+
+  // ⛔ FUNÇÃO 2: Usuário inativo  
+  private async handleInactiveUser(phone: string, userName: string): Promise<void> {
+    const message = `👋 Olá ${userName}!
+
+  ⚠️ Sua conta está *INATIVA* no momento.
+
+  📞 Para reativar seu acesso ao FinanceFlow, entre em contato conosco:
+
+  *(66) 99671-6331*
+
+  Nossa equipe te ajudará a reativar sua conta! 💙`;
+
+    await this.whatsappClient.sendMessage(phone, message);
+  }
+
 }

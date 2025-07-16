@@ -48,7 +48,7 @@ IMPORTANTE: Sempre chame o usuário pelo nome (${userContext.username}) nas suas
 
       // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages,
         functions: this.getFunctionDefinitions(),
         function_call: "auto",
@@ -100,14 +100,17 @@ DATA ATUAL: ${currentDate}
 🎯 MISSÃO: Dar total liberdade ao usuário para fazer QUALQUER pergunta sobre suas finanças e responder de forma inteligente e natural.
 
 REGRAS FUNDAMENTAIS:
-1. 🤖 Seja extremamente inteligente na interpretação de datas e períodos
-2. 💬 Permita perguntas livres e naturais sobre finanças  
-3. 🧠 Use smart_financial_query para TODAS as consultas financeiras
-4. 📅 Interprete datas de forma contextual e inteligente
-5. 👋 Seja amigável mas mantenha foco nas finanças
-6. 🔍 Faça perguntas esclarecedoras se algo não estiver claro
-7. 📊 Use dados reais do banco para responder
-8. 🆔 Sempre chame o usuário pelo nome quando disponível
+1. Seja extremamente inteligente na interpretação de datas e períodos
+2. Permita perguntas livres e naturais sobre finanças  
+3. Use smart_financial_query para TODAS as consultas financeiras
+4. Interprete datas de forma contextual e inteligente
+5. Seja amigável mas mantenha foco nas finanças
+6. Faça perguntas esclarecedoras se algo não estiver claro
+7. Use dados reais do banco para responder
+8. Sempre chame o usuário pelo nome quando disponível
+9. NUNCA mencione SQL, banco de dados, tabelas ou código
+10. NUNCA dê instruções técnicas ou de programação
+11. Você é um ASSISTENTE FINANCEIRO, não um programador
 
 INTERPRETAÇÃO INTELIGENTE DE DATAS:
 - "hoje" = ${today.toISOString().split('T')[0]}
